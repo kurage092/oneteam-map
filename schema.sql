@@ -45,6 +45,7 @@ grant select, insert, update, delete on settings, members, restaurants, wishes, 
 -- 6. 店の推しポイント
 alter table restaurants add column if not exists pitch text;
 notify pgrst, 'reload schema';
+notify pgrst, 'reload config';
 
 -- 7. 店を探す・URLから位置を読む（データベースから外のサイトを呼ぶ）
 create extension if not exists http with schema extensions;
@@ -81,3 +82,4 @@ grant execute on function public.hp_search(jsonb), public.shop_page(text) to ano
 alter role anon set statement_timeout = '20s';
 alter role authenticated set statement_timeout = '20s';
 notify pgrst, 'reload schema';
+notify pgrst, 'reload config';
