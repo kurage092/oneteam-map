@@ -55,6 +55,8 @@ begin
   if coalesce(k,'') = '' then return jsonb_build_object('error','no key'); end if;
   u := 'https://webservice.recruit.co.jp/hotpepper/gourmet/v1/?format=json&count=50&key=' || extensions.urlencode(k)
     || coalesce((select string_agg('&' || key || '=' || extensions.urlencode(value), '') from jsonb_each_text(q) where key in ('lat','lng','range','party_capacity','private_room','keyword')), '');
+  perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT_MS','8000');
+  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS','15000');
   r := extensions.http_get(u);
   return r.content::jsonb;
 end $$;
@@ -63,6 +65,8 @@ declare r extensions.http_response; n int := 0; loc text;
 begin
   loop
     if u !~ '^https://([a-z0-9-]+\.)*(tabelog\.com|hotpepper\.jp|goo\.gl|google\.com|google\.co\.jp)/' then return jsonb_build_object('error','host'); end if;
+    perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT_MS','8000');
+    perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS','15000');
     r := extensions.http_get(u);
     if r.status between 300 and 399 and n < 4 then
       select h.value into loc from unnest(r.headers) h where lower(h.field) = 'location';
@@ -73,4 +77,7 @@ begin
   return jsonb_build_object('url', u, 'status', r.status, 'body', left(r.content, 500000));
 end $$;
 grant execute on function public.hp_search(jsonb), public.shop_page(text) to anon, authenticated;
+-- 外のサイトの返事を待てるよう、待ち時間の上限を3秒から20秒にのばす
+alter role anon set statement_timeout = '20s';
+alter role authenticated set statement_timeout = '20s';
 notify pgrst, 'reload schema';
