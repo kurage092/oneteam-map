@@ -165,7 +165,7 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on
 // どちらのストアも同じ形の data を返す:
 // {settings:{passHash,officeLat,officeLng}, members:[{id,nickname,animal}], restaurants:[{id,name,url,genre,lat,lng,status,createdBy}], wishes:[{r,m}], visits:[{r,m}]}
 class LocalStore {
-  constructor(){ this.key='oneteam-demo-v1'; this.subs=[]; }
+  constructor(){ this.key='oneteam-demo-v2'; this.subs=[]; }
   async init(){
     try { this.d = JSON.parse(localStorage.getItem(this.key)); } catch { this.d = null; }
     if(!this.d) this.d = await demoSeed();
@@ -235,20 +235,39 @@ class SupaStore {
 }
 
 async function demoSeed(){
-  const names = [['たなか','bear'],['すずき','cat'],['さとう','rabbit'],['やまだ','dog'],['いとう','panda'],['わたなべ','fox']];
-  const members = names.map(([nickname,animal])=>({id:uid(),nickname,animal}));
-  const R = (name,genre,lat,lng,status)=>({id:uid(),name,genre,lat,lng,status,url:'',createdBy:members[0].id});
+  // 見本データ：8人、行きたい店・行った店、過去2回の会（割り勘済み）、今月の会（候補日に回答中）
+  const names = [['ゆかた','p_yukata','パクチー'],['たなか','bear',''],['すずき','cat','えび（アレルギー）'],['さとう','rabbit',''],['やまだ','dog','生ガキ'],['いとう','panda',''],['わたなべ','fox','辛いもの'],['こばやし','penguin','']];
+  const members = names.map(([nickname,animal,dislikes],i)=>({id:uid(),nickname,animal,dislikes,orderNo:i+1}));
+  const M = members.map(m=>m.id);
+  const R = (name,genre,lat,lng,status,budget,by)=>({id:uid(),name,genre,lat,lng,status,budget,url:'',createdBy:M[by]});
   const restaurants = [
-    R('（サンプル）有楽町の焼き鳥屋','居酒屋',35.6749,139.7630,'visited'),
-    R('（サンプル）神田の町中華','中華',35.6918,139.7709,'wish'),
-    R('（サンプル）日本橋のイタリアン','イタリアン',35.6833,139.7745,'wish'),
-    R('（サンプル）新橋の寿司','寿司',35.6663,139.7583,'visited')];
-  const [a,b,c,d] = restaurants.map(r=>r.id); const M = members.map(m=>m.id);
+    R('（見本）有楽町の焼き鳥屋','居酒屋',35.6749,139.7630,'visited',4000,1),
+    R('（見本）新橋の寿司','寿司',35.6663,139.7583,'visited',6000,2),
+    R('（見本）神田の町中華','中華',35.6918,139.7709,'wish',3000,0),
+    R('（見本）日本橋のイタリアン','イタリアン',35.6833,139.7745,'wish',5000,3),
+    R('（見本）八重洲のもつ鍋','鍋',35.6795,139.7700,'wish',4500,4),
+    R('（見本）銀座の韓国料理','韓国料理',35.6717,139.7650,'wish',4000,5),
+    R('（見本）人形町のすき焼き','和食',35.6862,139.7823,'wish',7000,6),
+    R('（見本）秋葉原のスペインバル','バル',35.6984,139.7731,'wish',4000,7)];
+  const [yaki,sushi,chuka,ita,motsu,kan,suki,bar] = restaurants.map(r=>r.id);
+  const wishes = [[chuka,[0,1,3,4]],[ita,[2,3,5]],[motsu,[0,1,4,6,7]],[kan,[2,5]],[suki,[0,3,6]],[bar,[7,1]]].flatMap(([r,ms])=>ms.map(i=>({r,m:M[i]})));
+  const visits = [[yaki,[0,1,2,3,4,5,6]],[sushi,[1,2,3,5,6,7]]].flatMap(([r,ms])=>ms.map(i=>({r,m:M[i]})));
+  const k = monthKey(), k1 = addMonth(k,-1), k2 = addMonth(k,-2);
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const day = (km,dd) => `${km}-${String(dd).padStart(2,'0')}`;
+  const e2={id:uid(),month:k2,organizer_id:M[0],status:'done',restaurant_id:yaki,total:28000,headcount:7,round_unit:100,paid:true,reserved:true,notified:true,meet_time:'19:00',meet_place:'有楽町駅 中央口'};
+  const e1={id:uid(),month:k1,organizer_id:M[1],status:'done',restaurant_id:sushi,total:37200,headcount:6,round_unit:100,paid:false,reserved:true,notified:true,meet_time:'19:00',meet_place:'新橋駅 SL広場'};
+  const e0={id:uid(),month:k,organizer_id:M[2],status:'planning'};
+  const d2={id:uid(),event_id:e2.id,day:day(k2,18)}, d1={id:uid(),event_id:e1.id,day:day(k1,16)};
+  e2.final_date_id=d2.id; e1.final_date_id=d1.id;
+  const now=new Date(); const cand=[3,6,9].map(n=>({id:uid(),event_id:e0.id,day:iso(new Date(now.getFullYear(),now.getMonth(),now.getDate()+n))}));
+  // 今月の回答：こばやしさんとやまださんはまだ答えていない（地図に「?」が出る）
+  const A = {0:'oxt',1:'oto',2:'ooo',3:'xoo',5:'tox',6:'oox'};
+  const date_answers = Object.entries(A).flatMap(([i,s])=>cand.map((d,j)=>({date_id:d.id,member_id:M[i],ans:s[j]})));
   return {
-    settings:{passHash: await sha('wanteam'), officeLat:DEFAULT_OFFICE.lat, officeLng:DEFAULT_OFFICE.lng},
-    members, restaurants,
-    wishes:[{r:b,m:M[0]},{r:b,m:M[2]},{r:b,m:M[4]},{r:c,m:M[1]},{r:c,m:M[3]}],
-    visits:[a,d].flatMap(r=>M.slice(0, r===a?6:5).map(m=>({r,m})))};
+    settings:{passHash: await sha('wanteam'), officeLat:DEFAULT_OFFICE.lat, officeLng:DEFAULT_OFFICE.lng, hpKey:'', stations:[]},
+    members, restaurants, wishes, visits,
+    events:[e2,e1,e0], event_dates:[d2,d1,...cand], date_answers};
 }
 
 /* ============ 動物アバター（コードで組むゆるキャラ） ============ */
@@ -421,9 +440,10 @@ function buildThumbs(){
 const thumb = k => thumbs[k] || '';
 
 /* ============ 状態 ============ */
-const store = SUPABASE_URL ? new SupaStore() : new LocalStore();
+const DEMO = new URLSearchParams(location.search).has('demo');   // ?demo で見本データ（共有データには触れない）
+const store = (SUPABASE_URL && !DEMO) ? new SupaStore() : new LocalStore();
 let me = null; // 自分のメンバー
-const ME_KEY = 'oneteam-me';
+const ME_KEY = DEMO ? 'oneteam-me-demo' : 'oneteam-me';
 const D = () => store.data;
 const memberOf = id => D().members.find(m=>m.id===id);
 const wishersOf = rid => D().wishes.filter(w=>w.r===rid).map(w=>memberOf(w.m)).filter(Boolean);
@@ -664,7 +684,8 @@ function settingsSheet(){
     <ul class="list">${(D().settings.stations||[]).map((st,i)=>`<li><div style="flex:1">${esc(st.name)}</div><button class="mini" data-st="${i}">消す</button></li>`).join('')}</ul>
     <div class="row" style="margin-top:6px"><input type="text" id="sStName" placeholder="駅名（例 新宿）" style="flex:1"><button class="btn" id="sStAdd">地図で場所を決める</button></div>
     <h3>合言葉</h3><label class="f" for="sPass">新しい合言葉</label><input type="text" id="sPass" autocomplete="off"><button class="btn wide" id="sPassOk" style="margin-top:8px">合言葉を変える</button>
-    <h3>この端末</h3><div class="row"><button class="btn ghost" id="sOut">ログアウト</button>${store instanceof LocalStore?'<button class="btn ghost" id="sReset">デモデータを最初に戻す</button>':''}</div>
+    <h3>この端末</h3><div class="row"><button class="btn ghost" id="sOut">ログアウト</button>${store instanceof LocalStore?'<button class="btn ghost" id="sReset">見本データを最初に戻す</button>':''}</div>
+    ${SUPABASE_URL?(DEMO?'<p style="margin-top:10px"><a href="./">本番のデータに戻る</a></p>':'<p style="margin-top:10px"><a href="./?demo">見本データで試す</a><br><span class="note">共有データには影響しません。</span></p>'):''}
     <p class="note" style="margin-top:14px">${store instanceof LocalStore?'デモモード：データはこの端末のブラウザだけに保存されます。':'共有モード：データはメンバー全員で共有されます。'}</p>`,'settings');
   $('#sOffice').onclick = ()=>startPick('会社の場所に合わせてください', [D().settings.officeLng,D().settings.officeLat], async c=>{ await store.setOffice(c.lat,c.lng); toast('会社の場所を保存しました'); });
   $('#sDisOk').onclick = async()=>{ await store.updateMember(me.id,{dislikes:$('#sDis').value.trim()}); toast('保存しました'); };
@@ -722,7 +743,7 @@ function unanswered(ev){ const ds=datesOf(ev); if(!ds.length || ev.final_date_id
 function attendees(ev){ if(!ev?.final_date_id) return []; return answersOf(ev.final_date_id).filter(a=>a.ans!=='x').map(a=>memberOf(a.member_id)).filter(Boolean); }
 
 function lineShare(text){ return 'https://line.me/R/share?text=' + encodeURIComponent(text); }
-const appUrl = () => location.href.split('#')[0];
+const appUrl = () => location.href.split('#')[0].replace(/[?&]demo\b/,'');
 
 function eventSheet(){
   if(store.missingP2){ openSheet('<h2>今月の会</h2><p>この機能を使うには、Supabaseに追加の設定（SQLの実行）が必要です。管理者に連絡してください。</p>','event-missing'); return; }
