@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ワンチーム食事会マップ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+/* VOICE: 仲間内のゆるい遊び場。管理画面より「すごろく盤」に近い
+   IDEA: 本物の地図が盤面、動物アバターがコマ
+   PICTURE: 全画面の3D地図。UIは下からのシートと小さなチップだけ
+   COLOUR and TYPE: 地図の色を主役に、UIは白地＋墨色、アクセントは朱(#e8533f)。M PLUS Rounded 1c
+   LAYOUT: スマホ縦画面基準。上に名前チップ、右下に追加ボタン、下にシート */
+:root{--ink:#1d2a33;--sub:#5d6b75;--bg:#fff;--line:#e3e7ea;--acc:#e8533f;--wish:#f2a541;--done:#2f9e6e;--r:18px}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;overflow:hidden;font:16px/1.5 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);background:#dfe9ec}
+button,input,select{font:inherit;color:inherit}
+#map{position:fixed;inset:0}
+.top{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:10px;right:10px;display:flex;gap:8px;align-items:center;z-index:5;pointer-events:none}
+.top>*{pointer-events:auto}
+.chip{display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:999px;padding:4px 14px 4px 4px;box-shadow:0 2px 10px #0002;border:0;min-height:44px;cursor:pointer;font-weight:800}
+.chip img{width:36px;height:36px;border-radius:50%;background:#f1f4f5}
+.brand{font-weight:800;background:var(--bg);border-radius:999px;padding:8px 14px;box-shadow:0 2px 10px #0002;font-size:15px}
+.sp{flex:1}
+.ib{width:44px;height:44px;border-radius:50%;border:0;background:var(--bg);box-shadow:0 2px 10px #0002;font-weight:800;cursor:pointer}
+.demo{position:fixed;top:calc(env(safe-area-inset-top) + 62px);left:10px;z-index:4;background:#1d2a33e6;color:#fff;font-size:12px;border-radius:10px;padding:4px 10px}
+.fab{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom) + 84px);z-index:5;height:56px;padding:0 22px;border-radius:28px;border:0;background:var(--acc);color:#fff;font-weight:800;font-size:17px;box-shadow:0 6px 18px #e8533f66;cursor:pointer}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:8px;padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(#fff0,#fffd 30%)}
+.bar button{flex:1;min-height:48px;border-radius:14px;border:1px solid var(--line);background:#fff;font-weight:800;cursor:pointer}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--bg);border-radius:var(--r) var(--r) 0 0;box-shadow:0 -6px 30px #0003;max-height:78vh;overflow:auto;padding:8px 18px calc(env(safe-area-inset-bottom) + 18px);transform:translateY(105%);transition:transform .25s ease}
+.sheet.open{transform:none}
+.x{position:absolute;right:10px;top:8px;width:44px;height:44px;border-radius:50%;border:0;background:#eef1f3;font-size:22px;cursor:pointer}
+.sheet h2{padding-right:48px}
+.grip{width:44px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 10px}
+.sheet h2{font-size:22px;line-height:1.2;margin:4px 0 6px}
+.sheet h3{font-size:15px;margin:16px 0 6px;color:var(--sub)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{min-height:48px;border-radius:14px;border:0;padding:0 18px;font-weight:800;cursor:pointer;background:#eef1f3}
+.btn.pri{background:var(--acc);color:#fff}
+.btn.wish{background:var(--wish);color:#fff}
+.btn.done{background:var(--done);color:#fff}
+.btn.ghost{background:none;border:1px solid var(--line)}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.45}
+label.f{display:block;margin:12px 0 4px;font-weight:800;font-size:14px}
+input[type=text],input[type=url],input[type=password],select{width:100%;min-height:48px;border-radius:12px;border:1px solid #cfd6db;padding:0 12px;font-size:16px;background:#fff}
+:focus-visible{outline:3px solid #1d77d2;outline-offset:2px}
+.tag{display:inline-block;font-size:13px;font-weight:800;border-radius:999px;padding:2px 10px;background:#eef1f3}
+.tag.wish{background:#fdebd0;color:#9a5a00}.tag.visited{background:#d5f0e3;color:#16613f}
+.faces{display:flex;flex-wrap:wrap;gap:6px}
+.face{display:flex;flex-direction:column;align-items:center;width:64px;font-size:12px;text-align:center}
+.face img{width:52px;height:52px;border-radius:50%;background:#f1f4f5}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.pick{border:2px solid transparent;border-radius:14px;background:#f1f4f5;padding:4px;cursor:pointer;font-size:12px;font-weight:800}
+.pick img{width:100%;aspect-ratio:1;display:block}
+.pick[aria-pressed=true]{border-color:var(--acc);background:#fde7e3}
+.pick:disabled{opacity:.3}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.list li button{flex:1;text-align:start;background:none;border:0;padding:0;cursor:pointer;min-height:44px}
+.list img{width:44px;height:44px;border-radius:50%;background:#f1f4f5}
+.note{font-size:13px;color:var(--sub)}
+.err{color:#c0392b;font-size:14px;min-height:1.2em;margin:6px 0 0}
+.chk{display:flex;align-items:center;gap:10px;padding:6px 0;min-height:44px}
+.chk input{width:22px;height:22px}
+.chk img{width:36px;height:36px;border-radius:50%;background:#f1f4f5}
+#gate{position:fixed;inset:0;z-index:20;background:linear-gradient(160deg,#ffe1d9,#d6eef2);display:flex;align-items:center;justify-content:center;padding:20px}
+#gate .card{background:#fff;border-radius:24px;padding:24px 20px;width:min(440px,100%);box-shadow:0 10px 40px #0002;max-height:92vh;overflow:auto}
+#gate h1{font-size:30px;line-height:1.1;margin:0 0 4px}
+.pin{display:flex;flex-direction:column;align-items:center;cursor:pointer;transform-origin:bottom center}
+.pin b{background:#fff;border-radius:10px;padding:2px 8px;font-size:12px;box-shadow:0 2px 6px #0003;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.pin i{width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);margin-top:3px;border:2px solid #fff;box-shadow:0 1px 4px #0005}
+.pin.wish i{background:var(--wish)}.pin.visited i{background:var(--done)}
+.office{background:var(--ink);color:#fff;border-radius:10px;padding:3px 9px;font-size:12px;font-weight:800;box-shadow:0 2px 6px #0004}
+#cross{position:fixed;left:50%;top:50%;width:40px;height:40px;margin:-40px 0 0 -20px;z-index:6;display:none;pointer-events:none}
+#pickbar{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 16px);z-index:7;display:none;gap:8px;background:#fff;border-radius:16px;padding:10px;box-shadow:0 4px 20px #0003;align-items:center}
+#pickbar p{flex:1;margin:0;font-size:14px;font-weight:800}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 70px);transform:translateX(-50%);z-index:30;background:var(--ink);color:#fff;border-radius:12px;padding:8px 16px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+.maplibregl-ctrl-attrib{font-size:10px}
+@media (prefers-reduced-motion:reduce){.sheet{transition:none}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="top">
+  <span class="brand">ワンチーム</span>
+  <span class="sp"></span>
+  <button class="chip" id="meChip" aria-label="自分のアバター"><img alt=""><span></span></button>
+  <button class="ib" id="setBtn" aria-label="設定">設定</button>
+</div>
+<div class="demo" id="demoBadge" hidden>デモモード：データはこの端末だけに保存</div>
+<button class="fab" id="addBtn">＋ 店を登録</button>
+<div class="bar">
+  <button id="listBtn">店の一覧</button>
+  <button id="memBtn">メンバー</button>
+  <button id="homeBtn">会社に戻る</button>
+</div>
+
+<svg id="cross" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 38 C20 38 6 22 6 14 a14 14 0 0 1 28 0 C34 22 20 38 20 38Z" fill="#e8533f" stroke="#fff" stroke-width="2"/><circle cx="20" cy="14" r="5" fill="#fff"/></svg>
+<div id="pickbar"><p id="pickMsg">地図を動かして位置を合わせてください</p><button class="btn ghost" id="pickCancel">やめる</button><button class="btn pri" id="pickOk">ここにする</button></div>
+
+<section class="sheet" id="sheet" aria-live="polite"><div class="grip"></div><button class="x" id="sheetX" aria-label="閉じる">×</button><div id="sheetBody"></div></section>
+<div id="gate"><div class="card" id="gateBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ============ 設定 ============ */
+// Supabase につなぐときはここに URL と anon key を入れる。空ならデモモード（端末内保存）
+const SUPABASE_URL = '';
+const SUPABASE_ANON_KEY = '';
+const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const DEFAULT_OFFICE = {lat: 35.6812, lng: 139.7671};
+const AREA_KM = 12; // 電車30分の目安（半径）。正確な圏内は駅の登録で扱う（P2）
+
+const ANIMALS = [
+  ['dog','いぬ'],['cat','ねこ'],['bear','くま'],['rabbit','うさぎ'],
+  ['panda','パンダ'],['fox','きつね'],['pig','ぶた'],['frog','かえる'],
+  ['penguin','ペンギン'],['koala','コアラ'],['lion','ライオン'],['monkey','さる']];
+const ANIMAL_NAME = Object.fromEntries(ANIMALS);
+const GENRES = ['和食','寿司','焼肉','中華','イタリアン','フレンチ','居酒屋','エスニック','カレー','ラーメン','その他'];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+async function sha(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('oneteam:' + s.trim()));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove('on'),2200); }
+
+/* ============ データ層 ============ */
+// どちらのストアも同じ形の data を返す:
+// {settings:{passHash,officeLat,officeLng}, members:[{id,nickname,animal}], restaurants:[{id,name,url,genre,lat,lng,status,createdBy}], wishes:[{r,m}], visits:[{r,m}]}
+class LocalStore {
+  constructor(){ this.key='oneteam-demo-v1'; this.subs=[]; }
+  async init(){
+    try { this.d = JSON.parse(localStorage.getItem(this.key)); } catch { this.d = null; }
+    if(!this.d) this.d = await demoSeed();
+    this.save(false);
+  }
+  save(emit=true){ try{ localStorage.setItem(this.key, JSON.stringify(this.d)); }catch{} if(emit) this.subs.forEach(f=>f()); }
+  get data(){ return this.d; }
+  onChange(f){ this.subs.push(f); }
+  async setPass(h){ this.d.settings.passHash=h; this.save(); }
+  async setOffice(lat,lng){ Object.assign(this.d.settings,{officeLat:lat,officeLng:lng}); this.save(); }
+  async addMember(m){ const x={id:uid(),...m}; this.d.members.push(x); this.save(); return x; }
+  async updateMember(id,p){ Object.assign(this.d.members.find(m=>m.id===id),p); this.save(); }
+  async addRestaurant(r){ const x={id:uid(),status:'wish',...r}; this.d.restaurants.push(x); this.save(); return x; }
+  async updateRestaurant(id,p){ Object.assign(this.d.restaurants.find(r=>r.id===id),p); this.save(); }
+  async deleteRestaurant(id){ const d=this.d; d.restaurants=d.restaurants.filter(r=>r.id!==id); d.wishes=d.wishes.filter(w=>w.r!==id); d.visits=d.visits.filter(v=>v.r!==id); this.save(); }
+  async setWish(r,m,on){ const d=this.d; d.wishes=d.wishes.filter(w=>!(w.r===r&&w.m===m)); if(on) d.wishes.push({r,m}); this.save(); }
+  async setVisits(r,ms){ const d=this.d; d.visits=d.visits.filter(v=>v.r!==r); ms.forEach(m=>d.visits.push({r,m})); this.save(); }
+  async reset(){ this.d = await demoSeed(); this.save(); }
+}
+
+class SupaStore {
+  constructor(){ this.subs=[]; this.d=null; }
+  async init(){
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+    this.sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    await this.reload();
+    let t; this.sb.channel('all').on('postgres_changes',{event:'*',schema:'public'},()=>{ clearTimeout(t); t=setTimeout(()=>this.reload(true),300); }).subscribe();
+  }
+  async reload(emit){
+    const q = n => this.sb.from(n).select('*');
+    const [s,m,r,w,v] = await Promise.all([q('settings'),q('members'),q('restaurants'),q('wishes'),q('visits')]);
+    const st = (s.data||[])[0] || {};
+    this.d = {
+      settings:{passHash:st.pass_hash||null, officeLat:st.office_lat??DEFAULT_OFFICE.lat, officeLng:st.office_lng??DEFAULT_OFFICE.lng},
+      members:(m.data||[]).map(x=>({id:x.id,nickname:x.nickname,animal:x.animal})),
+      restaurants:(r.data||[]).map(x=>({id:x.id,name:x.name,url:x.url,genre:x.genre,lat:x.lat,lng:x.lng,status:x.status,createdBy:x.created_by})),
+      wishes:(w.data||[]).map(x=>({r:x.restaurant_id,m:x.member_id})),
+      visits:(v.data||[]).map(x=>({r:x.restaurant_id,m:x.member_id}))};
+    if(emit) this.subs.forEach(f=>f());
+  }
+  get data(){ return this.d; }
+  onChange(f){ this.subs.push(f); }
+  async run(p){ const {error,data} = await p; if(error){ toast('保存に失敗しました'); throw error; } await this.reload(true); return data; }
+  setPass(h){ return this.run(this.sb.from('settings').upsert({id:1,pass_hash:h})); }
+  setOffice(lat,lng){ return this.run(this.sb.from('settings').upsert({id:1,office_lat:lat,office_lng:lng})); }
+  async addMember(m){ const d = await this.run(this.sb.from('members').insert(m).select()); return d[0]; }
+  updateMember(id,p){ return this.run(this.sb.from('members').update(p).eq('id',id)); }
+  async addRestaurant(r){ const d = await this.run(this.sb.from('restaurants').insert({name:r.name,url:r.url,genre:r.genre,lat:r.lat,lng:r.lng,status:'wish',created_by:r.createdBy}).select()); return {...d[0]}; }
+  updateRestaurant(id,p){ return this.run(this.sb.from('restaurants').update(p).eq('id',id)); }
+  deleteRestaurant(id){ return this.run(this.sb.from('restaurants').delete().eq('id',id)); }
+  setWish(r,m,on){ const t=this.sb.from('wishes'); return this.run(on ? t.upsert({restaurant_id:r,member_id:m}) : t.delete().eq('restaurant_id',r).eq('member_id',m)); }
+  async setVisits(r,ms){ await this.sb.from('visits').delete().eq('restaurant_id',r); return this.run(this.sb.from('visits').insert(ms.map(m=>({restaurant_id:r,member_id:m})))); }
+}
+
+async function demoSeed(){
+  const names = [['たなか','bear'],['すずき','cat'],['さとう','rabbit'],['やまだ','dog'],['いとう','panda'],['わたなべ','fox']];
+  const members = names.map(([nickname,animal])=>({id:uid(),nickname,animal}));
+  const R = (name,genre,lat,lng,status)=>({id:uid(),name,genre,lat,lng,status,url:'',createdBy:members[0].id});
+  const restaurants = [
+    R('（サンプル）有楽町の焼き鳥屋','居酒屋',35.6749,139.7630,'visited'),
+    R('（サンプル）神田の町中華','中華',35.6918,139.7709,'wish'),
+    R('（サンプル）日本橋のイタリアン','イタリアン',35.6833,139.7745,'wish'),
+    R('（サンプル）新橋の寿司','寿司',35.6663,139.7583,'visited')];
+  const [a,b,c,d] = restaurants.map(r=>r.id); const M = members.map(m=>m.id);
+  return {
+    settings:{passHash: await sha('wanteam'), officeLat:DEFAULT_OFFICE.lat, officeLng:DEFAULT_OFFICE.lng},
+    members, restaurants,
+    wishes:[{r:b,m:M[0]},{r:b,m:M[2]},{r:b,m:M[4]},{r:c,m:M[1]},{r:c,m:M[3]}],
+    visits:[a,d].flatMap(r=>M.slice(0, r===a?6:5).map(m=>({r,m})))};
+}
+
+/* ============ 動物アバター（コードで組むゆるキャラ） ============ */
+const grad = (()=>{ const t=new THREE.DataTexture(new Uint8Array([90,170,255]),3,1,THREE.RedFormat); t.minFilter=t.magFilter=THREE.NearestFilter; t.needsUpdate=true; return t; })();
+const matCache = {};
+const M = c => matCache[c] ||= new THREE.MeshToonMaterial({color:c, gradientMap:grad});
+const G = { s:new THREE.SphereGeometry(1,16,12), c:new THREE.ConeGeometry(1,1,12), cy:new THREE.CylinderGeometry(1,1,1,12), t:new THREE.TorusGeometry(1,.35,8,16) };
+function part(geo,col,pos,scl,rot){ const m=new THREE.Mesh(G[geo],M(col)); m.position.set(...pos); m.scale.set(...scl); if(rot) m.rotation.set(...rot); return m; }
+
+const LOOK = {
+  dog:{fur:0xc68a4f,belly:0xf3dcbf}, cat:{fur:0xf0a35e,belly:0xfff1e0}, bear:{fur:0x8a5a3b,belly:0xd9b48f},
+  rabbit:{fur:0xf7f4f2,belly:0xffffff}, panda:{fur:0xffffff,belly:0xffffff,limb:0x2b2b2b}, fox:{fur:0xe9772f,belly:0xfff3e6},
+  pig:{fur:0xf6b8c4,belly:0xfbd3db}, frog:{fur:0x7cc554,belly:0xd8f0b8}, penguin:{fur:0x33415c,belly:0xffffff,limb:0x33415c},
+  koala:{fur:0x9aa3ab,belly:0xe8ecef}, lion:{fur:0xf0c04c,belly:0xfbe7b0}, monkey:{fur:0x8b5e3c,belly:0xf1d2b0}};
+
+function makeAnimal(kind){
+  const L = LOOK[kind] || LOOK.dog, fur=L.fur, limb=L.limb||fur;
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  // 胴（2頭身）
+  body.add(part('s',fur,[0,.42,0],[.36,.4,.32]));
+  body.add(part('s',L.belly,[0,.38,.17],[.24,.28,.16]));
+  // 足
+  body.add(part('s',limb,[-.15,.06,.04],[.12,.08,.15])); body.add(part('s',limb,[.15,.06,.04],[.12,.08,.15]));
+  // 腕（肩にピボット）
+  const arms = [-1,1].map(sx=>{ const piv=new THREE.Group(); piv.position.set(.3*sx,.6,0);
+    piv.add(part('s',limb,[.06*sx,-.16,0],[.09,.18,.09])); body.add(piv); return piv; });
+  // 頭
+  const head = new THREE.Group(); head.position.y = 1.05; body.add(head);
+  const hc = kind==='panda'?0xffffff:fur;
+  head.add(part('s',hc,[0,0,0],[.5,.44,.44]));
+  // 目・ほっぺ
+  const eyeY = kind==='frog'? .34 : .02, eyeX = kind==='frog'? .2 : .17, eyeZ = kind==='frog'? .12 : .4;
+  if(kind==='frog'){ [-1,1].forEach(s=>head.add(part('s',fur,[eyeX*s,.3,.1],[.15,.15,.15]))); }
+  if(kind==='panda'){ [-1,1].forEach(s=>head.add(part('s',0x2b2b2b,[.17*s,.02,.36],[.11,.13,.06],[0,0,.5*s]))); }
+  [-1,1].forEach(s=>{ head.add(part('s',0x1b1b1b,[eyeX*s,eyeY,eyeZ+ (kind==='frog'?.12:0)],[.06,.075,.04]));
+    head.add(part('s',0xffffff,[eyeX*s+.02,eyeY+.03,eyeZ+.035+(kind==='frog'?.12:0)],[.02,.02,.01]));
+    if(kind!=='penguin') head.add(part('s',0xff9aa8,[.3*s,-.12,.3],[.07,.045,.02])); });
+  // 種類ごとの特徴（シルエットで分かる部分）
+  const ear = (geo,col,x,y,z,sc,rot)=>[-1,1].forEach(s=>head.add(part(geo,col,[x*s,y,z],sc,rot?[rot[0],rot[1],rot[2]*s]:null)));
+  const snout = (col,nose)=>{ head.add(part('s',col,[0,-.1,.36],[.18,.13,.12])); head.add(part('s',nose,[0,-.04,.47],[.06,.045,.04])); };
+  switch(kind){
+    case 'dog': ear('s',0x8a5a2f,.4,-.02,0,[.12,.24,.08],[0,0,.35]); snout(L.belly,0x222222); break;
+    case 'cat': ear('c',fur,.28,.38,0,[.14,.24,.1],[0,0,-.35]); head.add(part('s',0xff8fa0,[0,-.06,.43],[.04,.03,.03])); break;
+    case 'bear': ear('s',fur,.32,.32,0,[.13,.13,.08]); snout(L.belly,0x3a2a20); break;
+    case 'rabbit': ear('s',fur,.14,.62,0,[.09,.32,.07],[0,0,-.1]); ear('s',0xffc1cc,.14,.62,.05,[.05,.24,.03],[0,0,-.1]); head.add(part('s',0xff8fa0,[0,-.06,.43],[.04,.03,.03])); break;
+    case 'panda': ear('s',0x2b2b2b,.32,.32,0,[.13,.13,.08]); head.add(part('s',0x2b2b2b,[0,-.08,.43],[.05,.035,.03])); break;
+    case 'fox': ear('c',fur,.26,.42,0,[.15,.32,.1],[0,0,-.25]); head.add(part('c',0xffffff,[0,-.1,.42],[.14,.22,.14],[Math.PI/2,0,0])); head.add(part('s',0x222222,[0,-.1,.54],[.04,.035,.03])); break;
+    case 'pig': ear('c',fur,.3,.34,0,[.12,.16,.08],[0,0,-.5]); head.add(part('cy',0xf08aa0,[0,-.08,.42],[.13,.08,.13],[Math.PI/2,0,0])); [-1,1].forEach(s=>head.add(part('s',0x9b4a5a,[.045*s,-.08,.465],[.025,.03,.01]))); break;
+    case 'frog': head.add(part('s',0xc0405a,[0,-.16,.38],[.16,.03,.05])); break;
+    case 'penguin': head.add(part('s',0xffffff,[0,-.04,.2],[.36,.3,.28])); head.add(part('c',0xf3a43a,[0,-.08,.48],[.08,.16,.08],[Math.PI/2,0,0])); break;
+    case 'koala': ear('s',0xb9c0c6,.42,.16,0,[.2,.2,.1]); ear('s',0xeef0f2,.42,.16,.05,[.13,.13,.06]); head.add(part('s',0x2b2b2b,[0,-.05,.42],[.09,.12,.06])); break;
+    case 'lion': { const mane=part('t',0xc9792c,[0,0,-.02],[.5,.5,.6]); head.add(mane); head.children[0].scale.set(.44,.4,.4); ear('s',fur,.28,.3,.08,[.08,.08,.05]); snout(L.belly,0x5a3a20); break; }
+    case 'monkey': ear('s',0xf1d2b0,.46,0,0,[.12,.14,.06]); head.add(part('s',0xf1d2b0,[0,-.05,.3],[.34,.3,.2])); head.add(part('s',0x5a3a20,[0,-.06,.47],[.04,.03,.02])); break;
+  }
+  root.userData = {body, head, arms, kind};
+  return root;
+}
+
+// 選択画面用のサムネイル（同じモデルを小さく描いて画像にする）
+const thumbs = {};
+function buildThumbs(){
+  const cv = document.createElement('canvas'); cv.width = cv.height = 160;
+  const r = new THREE.WebGLRenderer({canvas:cv, antialias:true, alpha:true, preserveDrawingBuffer:true});
+  const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff,0x8899aa,1.6)); const dl=new THREE.DirectionalLight(0xffffff,1.6); dl.position.set(1,2,3); sc.add(dl);
+  const cam = new THREE.PerspectiveCamera(30,1,.1,20); cam.position.set(0,1.1,4.2); cam.lookAt(0,.85,0);
+  for(const [k] of ANIMALS){ const a=makeAnimal(k); a.rotation.y=-.3; sc.add(a); r.clear(); r.render(sc,cam); thumbs[k]=cv.toDataURL(); sc.remove(a); }
+  r.dispose();
+}
+const thumb = k => thumbs[k] || '';
+
+/* ============ 状態 ============ */
+const store = SUPABASE_URL ? new SupaStore() : new LocalStore();
+let me = null; // 自分のメンバー
+const ME_KEY = 'oneteam-me';
+const D = () => store.data;
+const memberOf = id => D().members.find(m=>m.id===id);
+const wishersOf = rid => D().wishes.filter(w=>w.r===rid).map(w=>memberOf(w.m)).filter(Boolean);
+const visitorsOf = rid => D().visits.filter(v=>v.r===rid).map(v=>memberOf(v.m)).filter(Boolean);
+
+/* ============ 地図 ============ */
+const map = new maplibregl.Map({container:'map', style:MAP_STYLE, center:[DEFAULT_OFFICE.lng,DEFAULT_OFFICE.lat], zoom:13.6, pitch:50, maxPitch:65, attributionControl:{compact:true}});
+let mapReady = false;
+const officeEl = document.createElement('div'); officeEl.className='office'; officeEl.textContent='会社';
+const officeMarker = new maplibregl.Marker({element:officeEl, anchor:'bottom'});
+const pins = new Map();
+
+function circle(lat,lng,km){ const pts=[]; for(let i=0;i<=64;i++){ const a=i/64*2*Math.PI; pts.push([lng + km/(111.32*Math.cos(lat*Math.PI/180))*Math.cos(a), lat + km/110.57*Math.sin(a)]); } return {type:'Feature',geometry:{type:'Polygon',coordinates:[pts]}}; }
+
+function drawArea(){
+  const s=D().settings; officeMarker.setLngLat([s.officeLng,s.officeLat]).addTo(map);
+  const src = map.getSource('area'); const data = circle(s.officeLat,s.officeLng,AREA_KM);
+  if(src) src.setData(data); else {
+    map.addSource('area',{type:'geojson',data});
+    map.addLayer({id:'area-fill',type:'fill',source:'area',paint:{'fill-color':'#e8533f','fill-opacity':.05}});
+    map.addLayer({id:'area-line',type:'line',source:'area',paint:{'line-color':'#e8533f','line-width':2,'line-dasharray':[2,2],'line-opacity':.7}});
+  }
+}
+
+function drawPins(){
+  const seen = new Set();
+  for(const r of D().restaurants){
+    seen.add(r.id);
+    let p = pins.get(r.id);
+    if(!p){ const el=document.createElement('div'); el.className='pin'; el.innerHTML='<b></b><i></i>'; el.addEventListener('click',e=>{e.stopPropagation(); openShop(r.id);});
+      p = new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([r.lng,r.lat]).addTo(map); pins.set(r.id,p); }
+    p.setLngLat([r.lng,r.lat]); const el=p.getElement(); el.classList.remove('wish','visited'); el.classList.add(r.status); el.querySelector('b').textContent=r.name; el.setAttribute('aria-label',r.name);
+  }
+  for(const [id,p] of pins) if(!seen.has(id)){ p.remove(); pins.delete(id); }
+}
+
+/* ---- three.js をカスタムレイヤーとして地図に重ねる ---- */
+const avatarLayer = {
+  id:'avatars', type:'custom', renderingMode:'3d',
+  onAdd(m, gl){
+    this.camera = new THREE.Camera(); this.scene = new THREE.Scene();
+    this.scene.add(new THREE.HemisphereLight(0xffffff,0x8899aa,1.5));
+    const dl = new THREE.DirectionalLight(0xffffff,1.7); dl.position.set(.5,1,1.2); this.scene.add(dl);
+    this.renderer = new THREE.WebGLRenderer({canvas:m.getCanvas(), context:gl, antialias:true}); this.renderer.autoClear=false;
+    this.groups = new Map(); this.sync();
+  },
+  sync(){
+    if(!this.scene) return;
+    const s = D().settings; this.origin = maplibregl.MercatorCoordinate.fromLngLat([s.officeLng,s.officeLat],0); this.unit = this.origin.meterInMercatorCoordinateUnits();
+    for(const g of this.groups.values()) this.scene.remove(g); this.groups.clear();
+    for(const r of D().restaurants){
+      const who = r.status==='visited' ? visitorsOf(r.id) : wishersOf(r.id);
+      if(!who.length) continue;
+      const g = new THREE.Group(); const mc = maplibregl.MercatorCoordinate.fromLngLat([r.lng,r.lat],0);
+      g.position.set((mc.x-this.origin.x)/this.unit, 0, (mc.y-this.origin.y)/this.unit); g.userData={lat:r.lat, mode:r.status};
+      const n = who.length, rad = 30 + n*3.5;
+      who.forEach((mem,i)=>{
+        const a = makeAnimal(mem.animal); a.scale.setScalar(34);
+        const ang = (r.status==='visited' ? (n===1 ? Math.PI/2 : (i/n)*Math.PI*2 + Math.PI/2) : Math.PI*.15 + (i/Math.max(n-1,1))*Math.PI*.7);
+        const ox = Math.cos(ang)*rad, oz = (r.status==='visited' ? Math.sin(ang)*rad*.45 + rad*.5 + 30 : Math.sin(ang)*rad*.4 + 34);
+        a.position.set(ox,0,oz); a.userData.phase = i*1.3 + Math.random(); a.userData.face = r.status==='visited' ? 0 : -ox/rad*.5;
+        g.add(a);
+      });
+      if(r.status==='visited'){ // 旗
+        const pole = part('cy',0x666666,[0,22,-4],[.8,44,.8]); const flag = part('s',0xe8533f,[7,38,-4],[7,5,.6]); g.add(pole,flag); g.userData.flag=flag; }
+      this.scene.add(g); this.groups.set(r.id,g);
+    }
+    m_repaint();
+  },
+  render(gl, matrix){
+    if(!this.origin) return;
+    const z = map.getZoom(), t = performance.now()/1000;
+    for(const g of this.groups.values()){
+      const mpp = 40075016.686*Math.cos(g.userData.lat*Math.PI/180)/(512*2**z);
+      g.scale.setScalar(mpp);
+      const party = g.userData.mode==='visited';
+      for(const a of g.children){ const u=a.userData; if(!u.body) continue; const p=t*1+u.phase;
+        if(party){ // みんなで喜ぶ：ジャンプしてバンザイ
+          u.body.position.y = Math.abs(Math.sin(p*4))*.45;
+          u.arms[0].rotation.z = -2.6 + Math.sin(p*8)*.3; u.arms[1].rotation.z = 2.6 - Math.sin(p*8)*.3;
+          a.rotation.y = u.face + Math.sin(p*2)*.4; u.head.rotation.z = Math.sin(p*4)*.15;
+        } else { // 行きたそうに：店の方を向いて、そわそわ＋ときどき手を挙げる
+          const hop = (p % 3.2) < .45 ? Math.sin((p%3.2)/.45*Math.PI)*.35 : 0;
+          u.body.position.y = Math.abs(Math.sin(p*5))*.05 + hop;
+          a.rotation.y = u.face + Math.sin(p*1.7)*.35;
+          const raise = (p % 6) < 2 ? 1 : 0;
+          u.arms[1].rotation.z = THREE.MathUtils.lerp(u.arms[1].rotation.z, raise? 2.5 + Math.sin(p*10)*.25 : .15, .15);
+          u.arms[0].rotation.z = -.15 - Math.abs(Math.sin(p*5))*.15; u.head.rotation.z = Math.sin(p*1.7)*.12;
+        }
+      }
+      if(g.userData.flag) g.userData.flag.rotation.y = Math.sin(t*3)*.3;
+    }
+    const s = this.unit, o = this.origin;
+    const l = new THREE.Matrix4().makeTranslation(o.x,o.y,o.z).scale(new THREE.Vector3(s,-s,s)).multiply(new THREE.Matrix4().makeRotationX(Math.PI/2));
+    this.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix).multiply(l);
+    this.renderer.resetState(); this.renderer.render(this.scene,this.camera);
+    map.triggerRepaint();
+  }
+};
+function m_repaint(){ if(mapReady) map.triggerRepaint(); }
+
+function refresh(){
+  if(!mapReady) return;
+  drawArea(); drawPins(); avatarLayer.sync();
+  if(me){ me = memberOf(me.id) || me; $('#meChip img').src = thumb(me.animal); $('#meChip span').textContent = me.nickname; }
+  if(sheetState.kind==='shop' && sheetState.id) openShop(sheetState.id, true);
+}
+
+/* ============ シート ============ */
+const sheetState = {kind:null,id:null};
+function openSheet(html, kind=null, id=null){ $('#sheetBody').innerHTML = html; $('#sheet').classList.add('open'); sheetState.kind=kind; sheetState.id=id; }
+function closeSheet(){ $('#sheet').classList.remove('open'); sheetState.kind=null; sheetState.id=null; }
+map.on('click', ()=>{ if(!picking) closeSheet(); });
+const faces = list => list.length ? `<div class="faces">${list.map(m=>`<div class="face"><img src="${thumb(m.animal)}" alt=""><span>${esc(m.nickname)}</span></div>`).join('')}</div>` : '<p class="note">まだいません</p>';
+
+function openShop(id, keep){
+  const r = D().restaurants.find(x=>x.id===id); if(!r){ closeSheet(); return; }
+  const wishers = wishersOf(id), visitors = visitorsOf(id), iWish = wishers.some(m=>m.id===me.id);
+  const link = /^https?:\/\//.test(r.url||'') ? `<p><a href="${esc(r.url)}" target="_blank" rel="noopener">お店のページを開く</a></p>` : '';
+  const html = `<h2>${esc(r.name)}</h2>
+    <div class="row"><span class="tag ${r.status}">${r.status==='visited'?'行った！':'行きたい'}</span><span class="tag">${esc(r.genre||'ジャンル未設定')}</span></div>${link}
+    ${r.status==='visited'
+      ? `<h3>行ったメンバー（${visitors.length}人）</h3>${faces(visitors)}
+         <div class="row" style="margin-top:14px"><button class="btn ghost" data-a="editVisit">参加者を直す</button><button class="btn ghost" data-a="unvisit">行きたいに戻す</button></div>`
+      : `<h3>行きたいメンバー（${wishers.length}人）</h3>${faces(wishers)}
+         <div class="row" style="margin-top:14px"><button class="btn ${iWish?'ghost':'wish'}" data-a="wish">${iWish?'行きたいを取り消す':'行きたい！'}</button><button class="btn done" data-a="visit">行った！にする</button></div>`}
+    <div class="row" style="margin-top:18px"><button class="btn ghost" data-a="move">位置を直す</button><button class="btn ghost" data-a="del">削除</button></div>`;
+  openSheet(html,'shop',id);
+  if(!keep) map.easeTo({center:[r.lng,r.lat], offset:[0,-120], duration:600});
+  const on = (a,f)=>{ const b=$(`#sheetBody [data-a=${a}]`); if(b) b.onclick=f; };
+  on('wish', ()=>store.setWish(id,me.id,!iWish));
+  on('visit', ()=>visitForm(id, wishers.map(m=>m.id).concat(me.id)));
+  on('editVisit', ()=>visitForm(id, visitors.map(m=>m.id)));
+  on('unvisit', async()=>{ await store.setVisits(id,[]); await store.updateRestaurant(id,{status:'wish'}); });
+  on('move', ()=>startPick('店の位置に合わせてください', [r.lng,r.lat], async c=>{ await store.updateRestaurant(id,{lat:c.lat,lng:c.lng}); openShop(id); }));
+  on('del', ()=>{ const b=$('#sheetBody [data-a=del]'); if(b.dataset.sure){ store.deleteRestaurant(id); closeSheet(); toast('削除しました'); } else { b.dataset.sure=1; b.textContent='もう一度押すと削除'; b.style.color='#c0392b'; } });
+}
+
+function visitForm(id, pre){
+  const set = new Set(pre);
+  openSheet(`<h2>誰が行きましたか？</h2><p class="note">チェックした人が、地図の上でお祝いします。</p>
+    ${D().members.map(m=>`<label class="chk"><input type="checkbox" value="${esc(m.id)}" ${set.has(m.id)?'checked':''}><img src="${thumb(m.animal)}" alt="">${esc(m.nickname)}</label>`).join('')}
+    <div class="row" style="margin-top:12px"><button class="btn ghost" id="vfBack">戻る</button><button class="btn done" id="vfOk">保存する</button></div>`,'visit',id);
+  $('#vfBack').onclick = ()=>openShop(id,true);
+  $('#vfOk').onclick = async()=>{ const ids=[...document.querySelectorAll('#sheetBody input:checked')].map(i=>i.value);
+    if(!ids.length){ toast('1人以上えらんでください'); return; }
+    await store.setVisits(id,ids); await store.updateRestaurant(id,{status:'visited'}); toast('おつかれさまでした！'); openShop(id,true); };
+}
+
+/* ---- 店の登録：URLを貼る → 分かる範囲で自動入力 → 位置を確認 ---- */
+function parseShopUrl(u){
+  const out = {};
+  try{
+    const url = new URL(u.trim()); const s = decodeURIComponent(url.href);
+    let m = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || s.match(/[?&](?:q|ll|query)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+    if(m){ out.lat=+m[1]; out.lng=+m[2]; }
+    m = s.match(/\/maps\/place\/([^/@]+)/); if(m) out.name = m[1].replace(/\+/g,' ');
+    out.host = url.hostname;
+  }catch{}
+  return out;
+}
+let draft = null;
+function addForm(){
+  draft = draft || {url:'',name:'',genre:'',lat:null,lng:null};
+  const pos = draft.lat!=null ? '位置：設定ずみ' : '位置：まだ決まっていません';
+  openSheet(`<h2>行きたい店を登録</h2>
+    <label class="f" for="fUrl">お店のURL（食べログ、Googleマップなど）</label><input type="url" id="fUrl" inputmode="url" placeholder="https://..." value="${esc(draft.url)}">
+    <p class="note" id="fHint">GoogleマップのURLなら、店名と位置を自動で入れます。</p>
+    <label class="f" for="fName">店名</label><input type="text" id="fName" value="${esc(draft.name)}" maxlength="60">
+    <label class="f" for="fGenre">ジャンル</label><select id="fGenre"><option value="">選んでください</option>${GENRES.map(g=>`<option ${g===draft.genre?'selected':''}>${g}</option>`).join('')}</select>
+    <div class="row" style="margin-top:14px"><span class="note" id="fPos" style="flex:1">${pos}</span><button class="btn ghost" id="fPick">地図で位置を決める</button></div>
+    <p class="err" id="fErr"></p>
+    <div class="row"><button class="btn ghost" id="fCancel">やめる</button><button class="btn pri" id="fOk" style="flex:1">登録する</button></div>`,'add');
+  const sync = ()=>{ draft.url=$('#fUrl').value; draft.name=$('#fName').value; draft.genre=$('#fGenre').value; };
+  $('#fUrl').addEventListener('input', ()=>{ sync(); const p=parseShopUrl(draft.url);
+    if(p.name && !draft.name){ draft.name=p.name; $('#fName').value=p.name; }
+    if(p.lat!=null){ draft.lat=p.lat; draft.lng=p.lng; $('#fPos').textContent='位置：URLから設定しました'; map.easeTo({center:[p.lng,p.lat]}); }
+    $('#fHint').textContent = p.lat!=null ? 'URLから位置を読み取りました。' : p.host ? 'このURLからは位置が分からないので、地図で位置を決めてください。' : 'GoogleマップのURLなら、店名と位置を自動で入れます。'; });
+  $('#fPick').onclick = ()=>{ sync(); startPick('お店の場所に合わせてください', draft.lat!=null?[draft.lng,draft.lat]:null, c=>{ draft.lat=c.lat; draft.lng=c.lng; addForm(); }, addForm); };
+  $('#fCancel').onclick = ()=>{ draft=null; closeSheet(); };
+  $('#fOk').onclick = async()=>{ sync();
+    if(!draft.name.trim()){ $('#fErr').textContent='店名を入れてください'; return; }
+    if(draft.lat==null){ $('#fErr').textContent='地図で位置を決めてください'; return; }
+    const r = await store.addRestaurant({name:draft.name.trim(),url:draft.url.trim(),genre:draft.genre,lat:draft.lat,lng:draft.lng,createdBy:me.id});
+    await store.setWish(r.id,me.id,true); draft=null; toast('登録しました。地図であなたが待っています'); openShop(r.id); };
+}
+
+/* ---- 地図の中央で位置を決めるモード ---- */
+let picking = null;
+function startPick(msg, at, ok, cancel){
+  closeSheet(); picking = {ok, cancel};
+  $('#pickMsg').textContent = msg; $('#cross').style.display='block'; $('#pickbar').style.display='flex';
+  document.querySelectorAll('.fab,.bar').forEach(e=>e.style.display='none');
+  if(at) map.easeTo({center:at, zoom:Math.max(map.getZoom(),15.5)});
+}
+function endPick(){ $('#cross').style.display='none'; $('#pickbar').style.display='none'; document.querySelectorAll('.fab,.bar').forEach(e=>e.style.display=''); }
+$('#pickOk').onclick = ()=>{ const c=map.getCenter(), p=picking; picking=null; endPick(); p.ok({lat:+c.lat.toFixed(6), lng:+c.lng.toFixed(6)}); };
+$('#pickCancel').onclick = ()=>{ const p=picking; picking=null; endPick(); p.cancel && p.cancel(); };
+
+/* ---- 一覧・メンバー・設定 ---- */
+function listSheet(){
+  const rs = [...D().restaurants].sort((a,b)=>(a.status>b.status?-1:1) || wishersOf(b.id).length-wishersOf(a.id).length);
+  openSheet(`<h2>店の一覧</h2>${rs.length?`<ul class="list">${rs.map(r=>`<li><span class="tag ${r.status}">${r.status==='visited'?'行った':'行きたい'}</span><button data-id="${esc(r.id)}"><b>${esc(r.name)}</b><br><span class="note">${esc(r.genre||'')}　${r.status==='visited'?`${visitorsOf(r.id).length}人で行った`:`行きたい ${wishersOf(r.id).length}人`}</span></button></li>`).join('')}</ul>`:'<p class="note">まだ店がありません。右下の「店を登録」から追加してください。</p>'}`,'list');
+  document.querySelectorAll('#sheetBody [data-id]').forEach(b=>b.onclick=()=>openShop(b.dataset.id));
+}
+function memberSheet(){
+  const ms = D().members.map(m=>({m, w:D().wishes.filter(x=>x.m===m.id).length, v:D().visits.filter(x=>x.m===m.id).length}));
+  openSheet(`<h2>メンバー（${ms.length}人）</h2><ul class="list">${ms.map(({m,w,v})=>`<li><img src="${thumb(m.animal)}" alt=""><div style="flex:1"><b>${esc(m.nickname)}</b>${m.id===me.id?'（あなた）':''}<br><span class="note">${ANIMAL_NAME[m.animal]||''}　参加 ${v}回・行きたい ${w}店</span></div></li>`).join('')}</ul>`,'members');
+}
+function settingsSheet(){
+  openSheet(`<h2>設定</h2>
+    <h3>会社の場所</h3><p class="note">30分圏の目安（点線の円）の中心になります。</p><button class="btn wide" id="sOffice">地図で会社の場所を決める</button>
+    <h3>自分のアバター</h3><button class="btn wide" id="sAnimal">動物を変える</button>
+    <h3>合言葉</h3><label class="f" for="sPass">新しい合言葉</label><input type="text" id="sPass" autocomplete="off"><button class="btn wide" id="sPassOk" style="margin-top:8px">合言葉を変える</button>
+    <h3>この端末</h3><div class="row"><button class="btn ghost" id="sOut">ログアウト</button>${store instanceof LocalStore?'<button class="btn ghost" id="sReset">デモデータを最初に戻す</button>':''}</div>
+    <p class="note" style="margin-top:14px">${store instanceof LocalStore?'デモモード：データはこの端末のブラウザだけに保存されます。':'共有モード：データはメンバー全員で共有されます。'}</p>`,'settings');
+  $('#sOffice').onclick = ()=>startPick('会社の場所に合わせてください', [D().settings.officeLng,D().settings.officeLat], async c=>{ await store.setOffice(c.lat,c.lng); toast('会社の場所を保存しました'); });
+  $('#sAnimal').onclick = ()=>animalPicker(me.animal, async k=>{ await store.updateMember(me.id,{animal:k}); closeSheet(); }, true);
+  $('#sPassOk').onclick = async()=>{ const v=$('#sPass').value; if(v.trim().length<4){ toast('4文字以上にしてください'); return; } await store.setPass(await sha(v)); toast('合言葉を変えました。メンバーに伝えてください'); };
+  $('#sOut').onclick = ()=>{ try{localStorage.removeItem(ME_KEY);}catch{} location.reload(); };
+  const rs=$('#sReset'); if(rs) rs.onclick = async()=>{ await store.reset(); try{localStorage.removeItem(ME_KEY);}catch{} location.reload(); };
+}
+function animalPicker(cur, done, inSheet){
+  const taken = new Set(D().members.filter(m=>!me || m.id!==me.id).map(m=>m.animal));
+  let sel = cur && !taken.has(cur) ? cur : null;
+  const html = `<h2>動物を選んでください</h2><p class="note">ほかの人が使っている動物は選べません。</p>
+    <div class="grid">${ANIMALS.map(([k,n])=>`<button class="pick" data-k="${k}" aria-pressed="${k===sel}" ${taken.has(k)?'disabled':''}><img src="${thumb(k)}" alt="">${n}</button>`).join('')}</div>
+    <button class="btn pri wide" id="apOk" style="margin-top:14px" ${sel?'':'disabled'}>これにする</button>`;
+  const host = inSheet ? (openSheet(html,'animal'), $('#sheetBody')) : ($('#gateBody').innerHTML = html, $('#gateBody'));
+  host.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{ sel=b.dataset.k; host.querySelectorAll('.pick').forEach(x=>x.setAttribute('aria-pressed',x===b)); host.querySelector('#apOk').disabled=false; });
+  host.querySelector('#apOk').onclick = ()=>sel && done(sel);
+}
+
+/* ============ 入口：合言葉 → 自分を選ぶ ============ */
+function gate(){
+  $('#gate').style.display='flex';
+  const s = D().settings, first = !s.passHash;
+  $('#gateBody').innerHTML = `<h1>ワンチーム<br>食事会マップ</h1>
+    <p class="note">${first?'最初に、チームの合言葉を決めてください。':'チームの合言葉を入れてください。'}</p>
+    <label class="f" for="gPass">合言葉</label><input type="password" id="gPass" autocomplete="current-password">
+    <p class="err" id="gErr"></p><button class="btn pri wide" id="gOk">${first?'この合言葉で始める':'入る'}</button>
+    ${store instanceof LocalStore?'<p class="note" style="margin-top:12px">デモの合言葉は「wanteam」です。</p>':''}`;
+  const go = async()=>{ const v=$('#gPass').value; if(!v.trim()) return;
+    const h = await sha(v);
+    if(first){ await store.setPass(h); } else if(h!==D().settings.passHash){ $('#gErr').textContent='合言葉が違います'; return; }
+    whoAmI(); };
+  $('#gOk').onclick = go; $('#gPass').onkeydown = e=>{ if(e.key==='Enter') go(); };
+}
+function whoAmI(){
+  const ms = D().members;
+  $('#gateBody').innerHTML = `<h2 style="margin-top:0">あなたは誰ですか？</h2>
+    ${ms.length?`<ul class="list">${ms.map(m=>`<li><img src="${thumb(m.animal)}" alt=""><button data-id="${esc(m.id)}"><b>${esc(m.nickname)}</b></button></li>`).join('')}</ul>`:''}
+    <h3>はじめての人</h3><label class="f" for="gNick">ニックネーム（本名でなくてOK）</label><input type="text" id="gNick" maxlength="12">
+    <p class="err" id="gErr"></p><button class="btn pri wide" id="gNew">次へ：動物を選ぶ</button>`;
+  document.querySelectorAll('#gateBody [data-id]').forEach(b=>b.onclick=()=>enter(memberOf(b.dataset.id)));
+  $('#gNew').onclick = ()=>{ const n=$('#gNick').value.trim();
+    if(!n){ $('#gErr').textContent='ニックネームを入れてください'; return; }
+    if(ms.some(m=>m.nickname===n)){ $('#gErr').textContent='その名前はもう使われています'; return; }
+    animalPicker(null, async k=>enter(await store.addMember({nickname:n, animal:k}))); };
+}
+function enter(m){
+  me = m; try{ localStorage.setItem(ME_KEY, m.id); }catch{}
+  $('#gate').style.display='none'; refresh();
+}
+
+/* ============ 起動 ============ */
+$('#addBtn').onclick = ()=>addForm();
+$('#sheetX').onclick = ()=>{ if(sheetState.kind==='add') draft=null; closeSheet(); };
+$('#listBtn').onclick = listSheet; $('#memBtn').onclick = memberSheet; $('#setBtn').onclick = settingsSheet; $('#meChip').onclick = memberSheet;
+$('#homeBtn').onclick = ()=>{ const s=D().settings; map.flyTo({center:[s.officeLng,s.officeLat], zoom:13.6, pitch:50}); };
+
+(async()=>{
+  buildThumbs();
+  await store.init();
+  $('#demoBadge').hidden = !(store instanceof LocalStore);
+  store.onChange(refresh);
+  map.on('load', ()=>{ mapReady=true; map.addLayer(avatarLayer); const s=D().settings; map.jumpTo({center:[s.officeLng,s.officeLat]}); refresh(); });
+  let saved=null; try{ saved = localStorage.getItem(ME_KEY); }catch{}
+  const m = saved && memberOf(saved);
+  if(m) enter(m); else gate();
+})();
+</script>
+</body>
+</html>
