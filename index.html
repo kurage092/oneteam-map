@@ -561,7 +561,7 @@ $('#homeBtn').onclick = ()=>{ const s=D().settings; map.flyTo({center:[s.officeL
 (async()=>{
   buildThumbs();
   try { await store.init(); }
-  catch(e){ console.error(e); $('#gate').style.display='flex'; $('#gateBody').innerHTML='<h2 style="margin-top:0">データを読み込めませんでした</h2><p class="note">通信状態を確かめて、ページを読み込み直してください。続く場合は管理者に連絡してください。</p>'; return; }
+  catch(e){ console.error(e); $('#gate').style.display='flex'; $('#gateBody').innerHTML='<h2 style="margin-top:0">データを読み込めませんでした</h2><p class="note">通信状態を確かめて、ページを読み込み直してください。続く場合は、下の文字を管理者に伝えてください。</p><p class="note" id="errDetail" style="word-break:break-all"></p>'; $('#errDetail').textContent = String(e && (e.message || e.code || JSON.stringify(e)) || e); return; }
   $('#demoBadge').hidden = !(store instanceof LocalStore);
   store.onChange(refresh);
   map.on('load', ()=>{ mapReady=true; map.addLayer(avatarLayer); const s=D().settings; map.jumpTo({center:[s.officeLng,s.officeLat]}); refresh(); });
