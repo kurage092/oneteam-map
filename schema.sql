@@ -41,3 +41,7 @@ alter publication supabase_realtime add table events, event_dates, date_answers;
 
 -- 5. 権限（最近のSupabaseでは必要）
 grant select, insert, update, delete on settings, members, restaurants, wishes, visits to anon, authenticated;
+
+-- 6. 店の推しポイント
+alter table restaurants add column if not exists pitch text;
+notify pgrst, 'reload schema';
