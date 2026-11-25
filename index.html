@@ -105,7 +105,7 @@ input[type=text],input[type=url],input[type=password],select{width:100%;min-heig
 .office{background:var(--ink);color:#fff;border-radius:10px;padding:3px 9px;font-size:12px;font-weight:600;box-shadow:0 2px 6px #0004}
 #cross{position:fixed;left:50%;top:50%;width:40px;height:40px;margin:-40px 0 0 -20px;z-index:6;display:none;pointer-events:none}
 #pickbar{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 16px);z-index:7;display:none;gap:8px;background:#fff;border-radius:16px;padding:10px;box-shadow:0 4px 20px #0003;align-items:center}
-#pickbar p{flex:1;margin:0;font-size:14px;font-weight:600}
+#pickbar{flex-wrap:wrap}#pickbar p{flex:1 1 100%;margin:0 4px 2px;font-size:14px;font-weight:600;line-height:1.5}#pickbar .btn{flex:1}
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 70px);transform:translateX(-50%);z-index:30;background:var(--ink);color:#fff;border-radius:12px;padding:8px 16px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
 .maplibregl-ctrl-attrib{font-size:10px}
@@ -747,13 +747,18 @@ function visitForm(id, pre){
 }
 
 /* ---- 店の登録：URLを貼る → 分かる範囲で自動入力 → 位置を確認 ---- */
+const BADNAME = /^(google\s*(maps|マップ)?|googleマップ|食べログ|ホットペッパーグルメ|hot\s*pepper.*)$/i;
 function parseShopUrl(u){
   const out = {};
   try{
-    const url = new URL(u.trim()); const s = decodeURIComponent(url.href);
+    // 共有ボタンでは「店名 + URL」の形で貼られることがあるので、URLの部分だけ取り出す
+    const mu = String(u).match(/https?:\/\/\S+/); if(!mu) return out;
+    const pre = String(u).slice(0,mu.index).replace(/\s+/g,' ').trim(); if(pre && !BADNAME.test(pre)) out.name = pre.slice(0,60);
+    const url = new URL(mu[0]); const s = decodeURIComponent(url.href); out.url = url.href;
     let m = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || s.match(/[?&](?:q|ll|query)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
     if(m){ out.lat=+m[1]; out.lng=+m[2]; }
-    m = s.match(/\/maps\/place\/([^/@]+)/); if(m) out.name = m[1].replace(/\+/g,' ');
+    m = s.match(/\/maps\/place\/([^/@?]+)/); if(m) out.name = m[1].replace(/\+/g,' ');
+    else if(!out.name){ const q = url.searchParams.get('q')||url.searchParams.get('query'); if(q && !/^-?\d+\.\d+,|^(place_id|cid|ftid):/i.test(q)) out.name = q.split(/[,、]/)[0].trim(); }
     out.host = url.hostname;
   }catch{}
   return out;
@@ -761,14 +766,18 @@ function parseShopUrl(u){
 // URLのページを読んで、店名と位置を探す（食べログ・ホットペッパー・Googleマップの短いリンク）
 async function lookupUrl(u){
   if(!store.rpc) return {};
-  const d = await store.rpc('shop_page',{u}); if(!d || d.error) return {};
+  const d = await store.rpc('shop_page',{u:parseShopUrl(u).url||u}); if(!d || d.error) return {};
   const out = parseShopUrl(d.url||u), b = d.body||'';
   const pick = (...res)=>{ for(const re of res){ const m=b.match(re); if(m) return m; } return null; };
   const ll = pick(/"latitude"\s*:\s*"?(-?\d{2}\.\d+)"?[^}]{0,120}?"longitude"\s*:\s*"?(-?\d{3}\.\d+)/, /center=(-?\d{2}\.\d+)(?:,|%2C)(-?\d{3}\.\d+)/, /[?&]ll=(-?\d{2}\.\d+),(-?\d{3}\.\d+)/,
     /data-lat="(-?\d{2}\.\d+)"[^>]*data-lng="(-?\d{3}\.\d+)"/, /lat[=:]\s*"?(-?\d{2}\.\d{4,})"?[,&\s]+(?:lng|lon)[=:]\s*"?(-?\d{3}\.\d{4,})/, /@(-?\d{2}\.\d+),(-?\d{3}\.\d+)/);
   if(ll && out.lat==null){ out.lat=+ll[1]; out.lng=+ll[2]; }
-  const t = pick(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/, /<title>([^<]+)<\/title>/);
-  if(t && !out.name) out.name = t[1].replace(/&amp;/g,'&').split(/ - | \| |（|\(|【/)[0].trim();
+  if(!out.name){
+    const res = [/<meta[^>]+content="([^"]+)"[^>]+itemprop="name"/, /<meta[^>]+itemprop="name"[^>]+content="([^"]+)"/, /<meta[^>]+property="og:title"[^>]+content="([^"]+)"/, /<meta[^>]+content="([^"]+)"[^>]+property="og:title"/, /<title>([^<]+)<\/title>/];
+    for(const re of res){ const m=b.match(re); if(!m) continue;
+      const n = m[1].replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').split(/ · | - | \| |（|\(|【/)[0].trim();
+      if(n && !BADNAME.test(n)){ out.name=n; break; } }
+  }
   return out;
 }
 // 店名から位置を探す（ホットペッパー → だめなら地図の地名検索）
@@ -795,14 +804,18 @@ function addForm(){
     <p class="err" id="fErr"></p>
     <div class="row"><button class="btn ghost" id="fCancel">やめる</button><button class="btn pri" id="fOk" style="flex:1">提案する</button></div>`,'add');
   const sync = ()=>{ draft.url=$('#fUrl').value; draft.name=$('#fName').value; draft.genre=$('#fGenre').value; draft.budget=$('#fBud').value.replace(/[^\d]/g,''); draft.pitch=$('#fPitch').value; };
+  // 読み取れたら、地図でその場所を見せて確かめてもらう
+  const showFound = (q)=>{ sync(); draft.lat=q.lat; draft.lng=q.lng;
+    startPick(`${draft.name?'「'+draft.name+'」':'お店'}はここです。ずれていたら地図を動かしてください`, [q.lng,q.lat], c=>{ draft.lat=c.lat; draft.lng=c.lng; addForm(); $('#fPos').textContent='位置：設定ずみ'; $('#fHint').textContent='URLから店名と位置を入れました。ジャンルなどを足して「提案する」を押してください。'; }, addForm, 'この場所でOK', '戻る'); };
   $('#fUrl').addEventListener('input', ()=>{ sync(); const p=parseShopUrl(draft.url);
     if(p.name && !draft.name){ draft.name=p.name; $('#fName').value=p.name; }
-    if(p.lat!=null){ draft.lat=p.lat; draft.lng=p.lng; $('#fPos').textContent='位置：URLから設定しました'; map.easeTo({center:[p.lng,p.lat]}); }
-    $('#fHint').textContent = p.lat!=null ? 'URLから位置を読み取りました。' : p.host ? 'お店のページを読んでいます…' : '食べログ・ホットペッパー・GoogleマップのURLなら、店名と位置を自動で入れます。';
-    if(p.lat==null && p.host){ const u=draft.url; lookupUrl(u).then(q=>{ if(draft?.url!==u) return;
+    if(p.lat!=null && p.name){ showFound(p); return; }
+    if(!p.host) $('#fHint').textContent = '食べログ・ホットペッパー・GoogleマップのURLなら、店名と位置を自動で入れます。';
+    if(p.host){ const u=draft.url; $('#fHint').textContent='お店のページを読んでいます…'; lookupUrl(u).then(q=>{ if(draft?.url!==u || !$('#fUrl')) return;
       if(q.name && !draft.name){ draft.name=q.name; $('#fName').value=q.name; }
-      if(q.lat!=null){ draft.lat=q.lat; draft.lng=q.lng; $('#fPos').textContent='位置：URLから設定しました'; map.easeTo({center:[q.lng,q.lat]}); $('#fHint').textContent='お店のページから位置を読み取りました。'; }
-      else $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }).catch(()=>{ $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }); } });
+      if(q.lat==null && p.lat!=null){ q.lat=p.lat; q.lng=p.lng; }
+      if(q.lat!=null){ $('#fHint').textContent = draft.name ? 'お店のページから店名と位置を読み取りました。' : '位置を読み取りました。店名は入れてください。'; showFound(q); }
+      else $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }).catch(()=>{ if(draft?.url!==u || !$('#fUrl')) return; if(p.lat!=null){ showFound(p); return; } $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }); } });
   $('#fFind').onclick = async()=>{ sync(); if(!draft.name.trim()){ $('#fErr').textContent='先に店名を入れてください'; return; } $('#fFind').disabled=true;
     const q = await findByName(draft.name.trim()); $('#fFind').disabled=false;
     if(!q){ $('#fErr').textContent='見つかりませんでした。「地図で決める」で位置を合わせてください'; return; }
@@ -819,11 +832,11 @@ function addForm(){
 
 /* ---- 地図の中央で位置を決めるモード ---- */
 let picking = null;
-function startPick(msg, at, ok, cancel){
+function startPick(msg, at, ok, cancel, okLabel='ここにする', cancelLabel='やめる'){
   picking = {ok, cancel};
-  $('#pickMsg').textContent = msg; $('#cross').style.display='block'; $('#pickbar').style.display='flex';
+  $('#pickMsg').textContent = msg; $('#pickOk').textContent = okLabel; $('#pickCancel').textContent = cancelLabel; $('#cross').style.display='block'; $('#pickbar').style.display='flex';
   document.querySelectorAll('.fab,.mapbtn').forEach(e=>e.style.display='none'); $('#sheet').classList.add('hide');
-  if(at) map.easeTo({center:at, zoom:Math.max(map.getZoom(),15.5)});
+  if(at) map.easeTo({center:at, zoom:Math.max(map.getZoom(),16), duration:800});
 }
 function endPick(){ $('#cross').style.display='none'; $('#pickbar').style.display='none'; document.querySelectorAll('.fab,.mapbtn').forEach(e=>e.style.display=''); $('#sheet').classList.remove('hide'); }
 $('#pickOk').onclick = ()=>{ const c=map.getCenter(), p=picking; picking=null; endPick(); p.ok({lat:+c.lat.toFixed(6), lng:+c.lng.toFixed(6)}); };
