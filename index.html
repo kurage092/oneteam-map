@@ -309,6 +309,39 @@ function roundBox(w,h,d,r){
   const g=new THREE.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelThickness:b,bevelSize:b*.9,bevelSegments:3,curveSegments:4});
   g.translate(0,0,-(d-2*b)/2); return g; }
 let _yk=null;
+// 顔の面（球の一部）の範囲。phi は正面が π/2、theta は真上が 0
+const FACE={p0:Math.PI/2-.8, pl:1.6, t0:.85, tl:1.5};
+// 頭の形：楕円体をもとに、下半分を細くしてあごをシャープに
+function headGeo(g){ const p=g.attributes.position, v=new THREE.Vector3();
+  for(let i=0;i<p.count;i++){ v.fromBufferAttribute(p,i); let x=v.x*.39, y=v.y*.48, z=v.z*.4;
+    if(y<0){ const t=-y/.44; x*=1-.4*t**1.4; z*=1-.1*t*t; y*=1+.08*t; z+=.03*t*t; }
+    p.setXYZ(i,x,y,z); }
+  g.computeVertexNormals(); return g; }
+// 顔を描く（キャンバス左＝見る人の左）。目は笑って少し細く、口は歯を見せた大きな笑顔
+function faceTex(){
+  const W=512, c=document.createElement('canvas'); c.width=c.height=W; const x=c.getContext('2d');
+  const P=(a,th)=>[(.5+a/FACE.pl)*W, (th-FACE.t0)/FACE.tl*W];      // 角度→キャンバス座標
+  x.lineCap='round'; x.lineJoin='round';
+  [-1,1].forEach(s=>{
+    const [ex,ey]=P(.3*s,1.63), k=1.65;
+    const eyeShape=()=>{ x.beginPath(); x.moveTo(ex-31*k*s,ey+2); x.quadraticCurveTo(ex-6*s,ey-17*k,ex+33*k*s,ey+7*k); x.quadraticCurveTo(ex,ey+9*k,ex-31*k*s,ey+2); };
+    x.fillStyle='#fbf8f4'; eyeShape(); x.fill();                                         // 白目（アーモンド形、笑って少し細い）
+    x.save(); eyeShape(); x.clip(); x.fillStyle='#2a1d17'; x.beginPath(); x.arc(ex+4*s,ey+3*k,15*k,0,7); x.fill();
+    x.fillStyle='#0c0807'; x.beginPath(); x.arc(ex+4*s,ey+3*k,7*k,0,7); x.fill();
+    x.fillStyle='#fff'; x.beginPath(); x.arc(ex+4*s+6*k,ey-2*k,4*k,0,7); x.fill(); x.restore();
+    x.strokeStyle='#1d1512'; x.lineWidth=7*k; x.beginPath(); x.moveTo(ex-31*k*s,ey+2); x.quadraticCurveTo(ex-6*s,ey-17*k,ex+35*k*s,ey+8*k); x.stroke();   // 上まぶた
+    x.strokeStyle='rgba(120,80,60,.5)'; x.lineWidth=2.5*k; x.beginPath(); x.moveTo(ex-22*k*s,ey+6*k); x.quadraticCurveTo(ex,ey+9*k,ex+26*k*s,ey+8*k); x.stroke();
+    const [bx,by]=P(.3*s,1.42); x.strokeStyle='#1b1512'; x.lineWidth=6; x.beginPath(); x.moveTo(bx-40*k*s,by+10); x.quadraticCurveTo(bx,by-8,bx+42*k*s,by+4); x.stroke();   // 眉
+  });
+  const [nx,ny]=P(0,1.84); x.strokeStyle='rgba(150,95,75,.75)'; x.lineWidth=5; x.beginPath(); x.moveTo(nx-20,ny); x.quadraticCurveTo(nx,ny+12,nx+20,ny); x.stroke();   // 小鼻
+  x.strokeStyle='rgba(170,110,90,.45)'; x.lineWidth=4; x.beginPath(); x.moveTo(nx-8,ny-95); x.lineTo(nx-12,ny-14); x.stroke();            // 鼻筋の影
+  const [mx,my]=P(0,2.0), mw=100;
+  const mouth=()=>{ x.beginPath(); x.moveTo(mx-mw,my-14); x.quadraticCurveTo(mx,my+0,mx+mw,my-20); x.quadraticCurveTo(mx+10,my+100,mx-mw,my-14); };
+  x.fillStyle='#5a1f22'; mouth(); x.fill();
+  x.save(); mouth(); x.clip(); x.fillStyle='#fff'; x.beginPath(); x.moveTo(mx-mw,my-20); x.quadraticCurveTo(mx,my-6,mx+mw,my-26); x.lineTo(mx+mw,my+2); x.quadraticCurveTo(mx,my+30,mx-mw,my+6); x.fill();
+  x.fillStyle='#d97f80'; x.beginPath(); x.ellipse(mx+8,my+58,52,20,0,0,7); x.fill(); x.restore();
+  x.strokeStyle='#a85d58'; x.lineWidth=5; mouth(); x.stroke();
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4; return t; }
 const toonTex = map => new THREE.MeshToonMaterial({map, gradientMap:grad});
 function makePerson(kind){
   if(!_yk){
@@ -316,7 +349,10 @@ function makePerson(kind){
     const sl=stripeTex(); sl.repeat.set(2.5,2);
     _yk={ cloth:toonTex(cloth), sleeve:toonTex(sl), obi:toonTex(obiTex()),
       robeG:new THREE.LatheGeometry([[0,.06],[.33,.06],[.345,.1],[.31,.3],[.29,.5],[.29,.6],[.25,.68],[.12,.73],[0,.74]].map(([a,b])=>new THREE.Vector2(a,b)),24),
-      sleeveG:roundBox(.24,.32,.05,.05), strip:new THREE.BoxGeometry(1,1,1) };
+      sleeveG:roundBox(.24,.32,.05,.05), strip:new THREE.BoxGeometry(1,1,1),
+      headG:headGeo(new THREE.SphereGeometry(1,32,24)),
+      faceG:headGeo(new THREE.SphereGeometry(1.006,32,24,FACE.p0,FACE.pl,FACE.t0,FACE.tl)),
+      faceM:new THREE.MeshToonMaterial({map:faceTex(), gradientMap:grad, transparent:true, alphaTest:.05, polygonOffset:true, polygonOffsetFactor:-2}) };
   }
   const SKIN=0xf3d2b8, HAIR=0x1f1d23, EDGE=0x1a1c20;
   const root=new THREE.Group(), body=new THREE.Group(); root.add(body);
@@ -348,32 +384,29 @@ function makePerson(kind){
   const bag=new THREE.Group(); bag.position.set(.07,-.34,.15); arms[1].add(bag);
   const pouch=new THREE.Mesh(new THREE.LatheGeometry([[0,-.15],[.05,-.145],[.06,-.1],[.045,-.04],[.02,-.01],[.03,.01],[0,.012]].map(([a,b])=>new THREE.Vector2(a,b)),12), M(0x3a3c40)); bag.add(pouch);
   bag.add(part('t',0x1a1a1a,[0,.02,0],[.025,.025,.025],[Math.PI/2,0,0]));
-  // 頭：男性らしく少し面長、あごをすっきり
-  const head=new THREE.Group(); head.position.y=1.11; head.scale.setScalar(1.1); body.add(head);
-  head.add(part('s',SKIN,[0,0,0],[.41,.43,.4]));
-  head.add(part('s',SKIN,[0,-.15,.03],[.27,.25,.3]));
-  [-1,1].forEach(sx=>head.add(part('s',SKIN,[.4*sx,-.04,-.01],[.055,.08,.045])));
-  // 髪：後頭部と頭頂は短め、えりあしすっきり
-  head.add(part('s',HAIR,[0,.12,-.1],[.44,.41,.42]));
-  head.add(part('s',HAIR,[0,.03,-.16],[.38,.26,.28]));
-  [-1,1].forEach(sx=>head.add(part('s',HAIR,[.35*sx,.12,-.03],[.07,.11,.2],[0,0,.1*sx])));   // 耳の上にかかる横髪
-  head.add(part('s',HAIR,[0,.29,-.05],[.36,.18,.32]));   // 頭頂（ひと続きの丸み）
-  [[-.12,.4,-.05,.4],[.1,.42,-.12,-.5],[-.1,-.2,-.3,2.9],[.08,-.2,-.3,-2.9]].forEach(([x,y,z,rz])=>head.add(part('c',HAIR,[x,y,z],[.05,.1,.05],[-.4,0,rz]))); // 毛先
-  // 一番の特徴：センターパート。分け目から左右に大きな束で流れ、こめかみで外へ
-  [-1,1].forEach(sx=>{
-    head.add(part('s',HAIR,[.15*sx,.22,.31],[.085,.18,.07],[-.4,0,.8*sx]));                 // 分け目から斜めに流れる前髪
-    head.add(part('s',HAIR,[.25*sx,.2,.27],[.085,.17,.075],[-.35,0,.55*sx]));
-    [[.2,.08,.31,.4],[.3,.06,.22,.25]].forEach(([x,y,z,a])=>head.add(part('c',HAIR,[x*sx,y,z],[.035,.1,.03],[-.2,0,(Math.PI+a)*sx])));   // とがった毛先
-  });
-  // 顔：笑った目、まっすぐな眉、歯を見せた口（ほおの赤みは入れない）
-  [-1,1].forEach(sx=>{
-    head.add(part('s',0x1b1b1b,[.14*sx,-.04,.385],[.05,.06,.02]));
-    head.add(part('s',0xffffff,[.14*sx+.017,-.015,.402],[.016,.016,.006]));
-    head.add(part('s',0xffffff,[.14*sx-.012,-.065,.402],[.008,.008,.004]));
-    head.add(part('s',0x23211f,[.13*sx,.07,.372],[.05,.013,.012],[0,0,.08*sx]));
-  });
-  const mouth=new THREE.Mesh(new THREE.CircleGeometry(.085,16,Math.PI,Math.PI), M(0x6e2a2c)); mouth.position.set(0,-.17,.371); mouth.scale.set(1.1,.8,1); head.add(mouth);
-  const teeth=new THREE.Mesh(new THREE.PlaneGeometry(.15,.026), M(0xffffff)); teeth.position.set(0,-.182,.373); head.add(teeth);
+  // 頭：細めの卵形であごがシャープ。顔は描き込みテクスチャ（目・眉・口）を顔の面に貼る
+  const head=new THREE.Group(); head.position.y=1.15; head.scale.setScalar(1.1); body.add(head);
+  head.add(new THREE.Mesh(_yk.headG, M(SKIN)));
+  const face=new THREE.Mesh(_yk.faceG, _yk.faceM); head.add(face);
+  head.add(part('s',SKIN,[0,-.05,.39],[.026,.085,.032],[-.22,0,0]));                     // 鼻筋
+  head.add(part('s',SKIN,[0,-.125,.4],[.034,.024,.027]));                              // 鼻先
+  [-1,1].forEach(sx=>head.add(part('s',SKIN,[.39*sx,-.05,-.02],[.05,.08,.04],[0,.3*sx,0])));    // 耳
+  body.add(part('cy',SKIN,[0,.74,0],[.09,.1,.09]));                                     // 首
+  // 髪：頭頂は大きめのボリューム、毛束はとがった房で無造作に
+  const H=(geo,pos,scl,rot,col=HAIR)=>head.add(part(geo,col,pos,scl,rot));
+  H('s',[0,.15,-.07],[.45,.4,.43]);                       // 頭全体
+  H('s',[0,.32,.0],[.42,.22,.37]);                         // 頭頂のボリューム
+  H('s',[0,.02,-.2],[.39,.3,.27]);                        // 後頭部
+  // 後ろと横：下向きの房（えりあしは短め）
+  for(let i=0;i<9;i++){ const a=(-.8+i*.2)*Math.PI; const x=Math.sin(a)*.36, z=Math.cos(a)*.33-.04;
+    if(z>-.02) continue; H('c',[x,-.14,z],[.08,.2,.06],[Math.PI+(-z*.4),a,0]); }
+  [-1,1].forEach(sx=>{ H('c',[.36*sx,0,-.08],[.07,.18,.06],[Math.PI,0,-.03*sx]); });  // 耳の上にかかる横髪
+  // 前髪：センターパート。分け目から左右に、先がとがった房が流れる。見る人の右側は目の高さまで長め
+  const bang=(x,y,z,len,tilt,w)=>H('c',[x,y,z],[w,len,.05],[Math.PI-.3+Math.abs(x)*1.1,0,tilt]);   // 外側の房ほど頭に沿わせる
+  [[-1,[[.07,.17,.38,.3,-.06,.13],[.18,.15,.36,.3,-.1,.13],[.25,.1,.32,.26,-.04,.1],[.3,.04,.25,.2,.04,.07]]],
+   [ 1,[[.06,.15,.39,.38,.1,.13],[.17,.13,.37,.38,.16,.13],[.27,.08,.31,.32,.15,.12],[.32,.01,.22,.24,.08,.09]]]]
+   .forEach(([sx,list])=>list.forEach(([x,y,z,len,t,w])=>bang(x*sx-.015,y,z,len,t,w)));
+  [-1,1].forEach(sx=>H('s',[.15*sx,.27,.28],[.17,.09,.12],[-.5,0,-.35*sx]));             // 分け目の両側の毛の根元
   root.userData={body, head, arms, kind, drapes};
   return root;
 }
