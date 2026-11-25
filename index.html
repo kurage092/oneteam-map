@@ -101,6 +101,8 @@ input[type=text],input[type=url],input[type=password],select{width:100%;min-heig
 .pin{display:flex;flex-direction:column;align-items:center;cursor:pointer;transform-origin:bottom center}
 .pin b{background:#fff;border-radius:10px;padding:2px 8px;font-size:12px;box-shadow:0 2px 6px #0003;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
 .pin i{width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);margin-top:3px;border:2px solid #fff;box-shadow:0 1px 4px #0005}
+body.adding .fab{display:none}
+.dpin{display:flex;flex-direction:column;align-items:center;pointer-events:none}.dpin b{background:var(--ink);color:#fff;border-radius:10px;padding:3px 10px;font-size:13px;box-shadow:0 2px 6px #0003;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}.dpin b:empty{display:none}.dpin svg{width:36px;height:36px;filter:drop-shadow(0 2px 3px #0004)}
 .pin.wish i{background:var(--wish)}.pin.visited i{background:var(--done)}
 .office{background:var(--ink);color:#fff;border-radius:10px;padding:3px 9px;font-size:12px;font-weight:600;box-shadow:0 2px 6px #0004}
 #cross{position:fixed;left:50%;top:50%;width:40px;height:40px;margin:-40px 0 0 -20px;z-index:6;display:none;pointer-events:none}
@@ -669,6 +671,7 @@ function openSheet(html, kind=null, id=null){
   const same = sheetState.kind===kind && sheetState.id===id;
   if(!isTab && !sh.classList.contains('detail')) prevSnap = snap;   // 詳細を閉じたら元の高さに戻す
   const top = same ? $('#sheetBody').scrollTop : 0;
+  if(kind!=='add') hideDraftPin(); document.body.classList.toggle('adding', kind==='add');
   $('#sheetBody').innerHTML = html; sh.classList.add('on'); sh.classList.toggle('detail', !isTab);
   if(isTab){ tab = kind==='event-missing'?'event':kind; document.querySelectorAll('.tabs [data-tab]').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.tab===tab))); }
   sheetState.kind=kind; sheetState.id=id; $('#sheetBody').scrollTop = top;
@@ -789,7 +792,19 @@ async function findByName(name){
     if(r[0]) return {lat:+r[0].lat, lng:+r[0].lon}; }catch{}
   return null;
 }
-let draft = null;
+let draft = null, draftPin = null;
+// 入力中のお店の場所に、地図の上でピンを立てる（Googleマップで検索したときのように）
+function showDraftPin(fly){
+  if(!draft || draft.lat==null) return hideDraftPin();
+  if(!draftPin){ const el=document.createElement('div'); el.className='dpin';
+    el.innerHTML='<b></b><svg viewBox="0 0 40 40"><path d="M20 38 C20 38 6 22 6 14 a14 14 0 0 1 28 0 C34 22 20 38 20 38Z" fill="#e8533f" stroke="#fff" stroke-width="2"/><circle cx="20" cy="14" r="5" fill="#fff"/></svg>';
+    draftPin = new maplibregl.Marker({element:el, anchor:'bottom'}); }
+  draftPin.getElement().querySelector('b').textContent = (draft.name||'').trim();
+  draftPin.setLngLat([draft.lng,draft.lat]).addTo(map);
+  if(fly){ if(snap==='full') setSnap('half');
+    map.easeTo({center:[draft.lng,draft.lat], zoom:Math.max(map.getZoom(),16), offset:[0,-Math.round(innerHeight*.25)], duration:800}); }
+}
+function hideDraftPin(){ if(draftPin){ draftPin.remove(); } }
 function addForm(){
   draft = draft || {url:'',name:'',genre:'',lat:null,lng:null};
   const pos = draft.lat!=null ? '位置：設定ずみ' : '位置：まだ決まっていません';
@@ -804,9 +819,9 @@ function addForm(){
     <p class="err" id="fErr"></p>
     <div class="row"><button class="btn ghost" id="fCancel">やめる</button><button class="btn pri" id="fOk" style="flex:1">提案する</button></div>`,'add');
   const sync = ()=>{ draft.url=$('#fUrl').value; draft.name=$('#fName').value; draft.genre=$('#fGenre').value; draft.budget=$('#fBud').value.replace(/[^\d]/g,''); draft.pitch=$('#fPitch').value; };
-  // 読み取れたら、地図でその場所を見せて確かめてもらう
-  const showFound = (q)=>{ sync(); draft.lat=q.lat; draft.lng=q.lng;
-    startPick(`${draft.name?'「'+draft.name+'」':'お店'}はここです。ずれていたら地図を動かしてください`, [q.lng,q.lat], c=>{ draft.lat=c.lat; draft.lng=c.lng; addForm(); $('#fPos').textContent='位置：設定ずみ'; $('#fHint').textContent='URLから店名と位置を入れました。ジャンルなどを足して「提案する」を押してください。'; }, addForm, 'この場所でOK', '戻る'); };
+  // 読み取れたら、入力画面の後ろの地図にピンを立てる
+  const showFound = (q)=>{ sync(); draft.lat=q.lat; draft.lng=q.lng; $('#fPos').textContent='位置：設定ずみ（地図のピン）'; showDraftPin(true); };
+  $('#fName').addEventListener('input', ()=>{ sync(); if(draftPin) draftPin.getElement().querySelector('b').textContent=draft.name.trim(); });
   $('#fUrl').addEventListener('input', ()=>{ sync(); const p=parseShopUrl(draft.url);
     if(p.name && !draft.name){ draft.name=p.name; $('#fName').value=p.name; }
     if(p.lat!=null && p.name){ showFound(p); return; }
@@ -819,8 +834,8 @@ function addForm(){
   $('#fFind').onclick = async()=>{ sync(); if(!draft.name.trim()){ $('#fErr').textContent='先に店名を入れてください'; return; } $('#fFind').disabled=true;
     const q = await findByName(draft.name.trim()); $('#fFind').disabled=false;
     if(!q){ $('#fErr').textContent='見つかりませんでした。「地図で決める」で位置を合わせてください'; return; }
-    draft.lat=q.lat; draft.lng=q.lng; $('#fErr').textContent=''; $('#fPos').textContent='位置：店名から設定しました（違っていたら地図で直せます）'; map.easeTo({center:[q.lng,q.lat], zoom:Math.max(map.getZoom(),15)}); };
-  $('#fPick').onclick = ()=>{ sync(); startPick('お店の場所に合わせてください', draft.lat!=null?[draft.lng,draft.lat]:null, c=>{ draft.lat=c.lat; draft.lng=c.lng; addForm(); }, addForm); };
+    draft.lat=q.lat; draft.lng=q.lng; $('#fErr').textContent=''; $('#fPos').textContent='位置：店名から設定しました（違っていたら地図で直せます）'; showDraftPin(true); };
+  $('#fPick').onclick = ()=>{ sync(); hideDraftPin(); startPick('お店の場所に合わせてください', draft.lat!=null?[draft.lng,draft.lat]:null, c=>{ draft.lat=c.lat; draft.lng=c.lng; addForm(); }, addForm); };
   $('#fCancel').onclick = ()=>{ draft=null; closeSheet(); };
   $('#fOk').onclick = async()=>{ sync();
     if(!draft.name.trim()){ $('#fErr').textContent='店名を入れてください'; return; }
@@ -828,6 +843,7 @@ function addForm(){
     const r = await store.addRestaurant({name:draft.name.trim(),url:draft.url.trim(),genre:draft.genre,lat:draft.lat,lng:draft.lng,budget:draft.budget?+draft.budget:null,createdBy:me.id,pitch:(draft.pitch||'').trim()});
     draft=null; toast('提案しました。地図であなたがみんなを呼んでいます'); openShop(r.id); };
   $('#fSearch').onclick=()=>{ sync(); searchSheet('add'); };
+  showDraftPin(false);
 }
 
 /* ---- 地図の中央で位置を決めるモード ---- */
