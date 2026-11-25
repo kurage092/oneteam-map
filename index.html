@@ -116,8 +116,8 @@ import * as THREE from 'three';
 
 /* ============ 設定 ============ */
 // Supabase につなぐときはここに URL と anon key を入れる。空ならデモモード（端末内保存）
-const SUPABASE_URL = '';
-const SUPABASE_ANON_KEY = '';
+const SUPABASE_URL = 'https://czahuzhxuersojzuliat.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Mw0iVK6BAIOLcT3j9_79Qg_9Hyo7Ay1';
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const DEFAULT_OFFICE = {lat: 35.6812, lng: 139.7671};
 const AREA_KM = 12; // 電車30分の目安（半径）。正確な圏内は駅の登録で扱う（P2）
@@ -166,7 +166,7 @@ class LocalStore {
 class SupaStore {
   constructor(){ this.subs=[]; this.d=null; }
   async init(){
-    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/+esm');
     this.sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     await this.reload();
     let t; this.sb.channel('all').on('postgres_changes',{event:'*',schema:'public'},()=>{ clearTimeout(t); t=setTimeout(()=>this.reload(true),300); }).subscribe();
@@ -174,6 +174,7 @@ class SupaStore {
   async reload(emit){
     const q = n => this.sb.from(n).select('*');
     const [s,m,r,w,v] = await Promise.all([q('settings'),q('members'),q('restaurants'),q('wishes'),q('visits')]);
+    const bad = [s,m,r,w,v].find(x=>x.error); if(bad) throw bad.error;
     const st = (s.data||[])[0] || {};
     this.d = {
       settings:{passHash:st.pass_hash||null, officeLat:st.office_lat??DEFAULT_OFFICE.lat, officeLng:st.office_lng??DEFAULT_OFFICE.lng},
@@ -559,7 +560,8 @@ $('#homeBtn').onclick = ()=>{ const s=D().settings; map.flyTo({center:[s.officeL
 
 (async()=>{
   buildThumbs();
-  await store.init();
+  try { await store.init(); }
+  catch(e){ console.error(e); $('#gate').style.display='flex'; $('#gateBody').innerHTML='<h2 style="margin-top:0">データを読み込めませんでした</h2><p class="note">通信状態を確かめて、ページを読み込み直してください。続く場合は管理者に連絡してください。</p>'; return; }
   $('#demoBadge').hidden = !(store instanceof LocalStore);
   store.onChange(refresh);
   map.on('load', ()=>{ mapReady=true; map.addLayer(avatarLayer); const s=D().settings; map.jumpTo({center:[s.officeLng,s.officeLat]}); refresh(); });
