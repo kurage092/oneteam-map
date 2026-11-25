@@ -149,7 +149,7 @@ const ANIMALS = [
   ['dog','いぬ'],['cat','ねこ'],['bear','くま'],['rabbit','うさぎ'],
   ['panda','パンダ'],['fox','きつね'],['pig','ぶた'],['frog','かえる'],
   ['penguin','ペンギン'],['koala','コアラ'],['lion','ライオン'],['monkey','さる']];
-const ANIMAL_NAME = Object.fromEntries(ANIMALS);
+const ANIMAL_NAME = Object.fromEntries(ANIMALS); // 似顔アバターの名前は後で PEOPLE から足す
 const GENRES = ['和食','寿司','焼肉','中華','イタリアン','フレンチ','居酒屋','エスニック','カレー','ラーメン','その他'];
 
 const $ = s => document.querySelector(s);
@@ -264,7 +264,71 @@ const LOOK = {
   pig:{fur:0xf6b8c4,belly:0xfbd3db}, frog:{fur:0x7cc554,belly:0xd8f0b8}, penguin:{fur:0x33415c,belly:0xffffff,limb:0x33415c},
   koala:{fur:0x9aa3ab,belly:0xe8ecef}, lion:{fur:0xf0c04c,belly:0xfbe7b0}, monkey:{fur:0x8b5e3c,belly:0xf1d2b0}};
 
+/* ---- 似顔アバター（写真をもとにしたゆるキャラ。写真そのものは保存しない） ---- */
+const PEOPLE = [['p_yukata','似顔（浴衣）']];
+function stripeTex(base, stripe, dark){
+  const c=document.createElement('canvas'); c.width=128; c.height=64; const x=c.getContext('2d');
+  x.fillStyle=base; x.fillRect(0,0,128,64);
+  for(let i=0;i<8;i++){ const px=i*16+3; x.fillStyle=stripe; x.fillRect(px,0,3,64); x.fillStyle=dark; for(let y=0;y<64;y+=6) x.fillRect(px+6,y,2,3); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.colorSpace=THREE.SRGBColorSpace; return t; }
+function obiTex(){
+  const c=document.createElement('canvas'); c.width=128; c.height=32; const x=c.getContext('2d');
+  x.fillStyle='#f4f3ef'; x.fillRect(0,0,128,32); x.fillStyle='#2b2b2b'; x.fillRect(0,9,128,2); x.fillRect(0,21,128,2);
+  for(let i=0;i<16;i++){ x.fillRect(i*8+2,13,4,6); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=THREE.RepeatWrapping; t.repeat.set(3,1); t.colorSpace=THREE.SRGBColorSpace; return t; }
+let _yk=null;
+const toonTex = map => new THREE.MeshToonMaterial({map, gradientMap:grad});
+function makePerson(kind){
+  _yk ||= { cloth: toonTex((()=>{ const t=stripeTex('#3b3e44','#8fa3b3','#5d6a75'); t.repeat.set(2,1); return t; })()), obi: toonTex(obiTex()) };
+  const SKIN=0xf4d3bb, HAIR=0x1d1b20, COLLAR=0x26282c;
+  const root=new THREE.Group(), body=new THREE.Group(); root.add(body);
+  // 浴衣（すそが少し広がる、ひと続きの胴）
+  const robe=new THREE.Mesh(new THREE.CylinderGeometry(.27,.36,.62,20), _yk.cloth); robe.position.y=.36; body.add(robe);
+  body.add(part('s',0x3b3e44,[0,.67,0],[.27,.1,.25]));               // 肩の丸み
+  const obi=new THREE.Mesh(new THREE.CylinderGeometry(.295,.3,.13,20), _yk.obi); obi.position.y=.42; body.add(obi);
+  // えり（V字）と首元
+  body.add(part('s',SKIN,[0,.68,.17],[.07,.06,.04]));
+  [-1,1].forEach(sx=>body.add(part('s',COLLAR,[.06*sx,.6,.235],[.035,.14,.02],[0,0,.55*sx])));
+  const neck=new THREE.Mesh(new THREE.TorusGeometry(.09,.006,6,20), M(0xd0d4d8)); neck.rotation.x=Math.PI/2.4; neck.position.set(0,.7,.06); body.add(neck);
+  // 足（げた）
+  [-1,1].forEach(sx=>{ body.add(part('s',SKIN,[.11*sx,.06,.06],[.08,.05,.1])); body.add(part('s',0x6b4a2e,[.11*sx,.02,.06],[.1,.025,.13])); });
+  // 腕：広いそでの中から手が出る。肩にピボット
+  const arms=[-1,1].map(sx=>{ const piv=new THREE.Group(); piv.position.set(.27*sx,.62,0);
+    const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(.07,.13,.3,14), _yk.cloth); sleeve.position.set(.03*sx,-.15,0); piv.add(sleeve);
+    piv.add(part('s',SKIN,[.04*sx,-.33,0],[.06,.07,.06]));
+    body.add(piv); return piv; });
+  // 巾着袋（右手）
+  const bag=new THREE.Group(); bag.position.set(.05,-.42,.02); arms[1].add(bag);
+  bag.add(part('s',0x2f3236,[0,-.08,0],[.08,.1,.07])); bag.add(part('cy',0x2f3236,[0,.01,0],[.03,.05,.03]));
+  // 頭（大きめ、少し下すぼまり）
+  const head=new THREE.Group(); head.position.y=1.06; body.add(head);
+  head.add(part('s',SKIN,[0,0,0],[.44,.46,.42]));
+  head.add(part('s',SKIN,[0,-.14,.04],[.36,.3,.36]));                  // あご
+  [-1,1].forEach(sx=>head.add(part('s',SKIN,[.43*sx,-.02,0],[.06,.09,.05]))); // 耳
+  // 髪：後ろから頭頂を覆う
+  head.add(part('s',HAIR,[0,.13,-.09],[.46,.41,.42]));
+  head.add(part('s',HAIR,[0,-.06,-.16],[.44,.36,.32]));                // えりあしの後ろ
+  [-1,1].forEach(sx=>head.add(part('s',HAIR,[.4*sx,.02,-.02],[.11,.24,.2],[0,0,.12*sx]))); // 耳に少しかかる横の髪
+  // 一番の特徴：おでこを覆う長めの前髪（束を少しずつ外へ流す）
+  const bangs=[[-.26,.22,.29,.5],[-.13,.24,.33,.25],[0,.25,.34,0],[.13,.24,.33,-.22],[.26,.22,.29,-.45]];
+  bangs.forEach(([x,y,z,rz])=>head.add(part('s',HAIR,[x,y,z],[.1,.13,.07],[-.35,0,rz])));
+  [-1,1].forEach(sx=>head.add(part('c',HAIR,[.37*sx,.16,.2],[.06,.13,.05],[-.3,0,1.9*sx]))); // 外ハネ
+  head.add(part('c',HAIR,[.05,.47,-.02],[.06,.14,.06],[.3,0,-.3]));    // 頭頂のふんわり
+  // 顔：目（細めの笑顔の目）、まゆ、ひらいた笑顔の口、ほっぺ
+  [-1,1].forEach(sx=>{
+    head.add(part('s',0x1b1b1b,[.15*sx,-.02,.405],[.06,.05,.02]));
+    head.add(part('s',0xffffff,[.15*sx+.02,0,.425],[.018,.016,.006]));
+    head.add(part('s',0x2a2a2a,[.15*sx,.09,.39],[.06,.012,.01],[0,0,-.12*sx]));
+    head.add(part('s',0xff9aa8,[.26*sx,-.15,.33],[.06,.035,.02]));
+  });
+  const mouth=new THREE.Mesh(new THREE.CircleGeometry(.08,16,Math.PI,Math.PI), M(0x7a2a2e)); mouth.position.set(0,-.17,.4); mouth.scale.set(1,.85,1); head.add(mouth);
+  const teeth=new THREE.Mesh(new THREE.PlaneGeometry(.12,.025), M(0xffffff)); teeth.position.set(0,-.18,.402); head.add(teeth);
+  root.userData={body, head, arms, kind};
+  return root;
+}
+
 function makeAnimal(kind){
+  if(String(kind).startsWith('p_')) return makePerson(kind);
   const L = LOOK[kind] || LOOK.dog, fur=L.fur, limb=L.limb||fur;
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
   // 胴（2頭身）
@@ -319,7 +383,7 @@ function buildThumbs(){
   const r = new THREE.WebGLRenderer({canvas:cv, antialias:true, alpha:true, preserveDrawingBuffer:true});
   const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff,0x8899aa,1.6)); const dl=new THREE.DirectionalLight(0xffffff,1.6); dl.position.set(1,2,3); sc.add(dl);
   const cam = new THREE.PerspectiveCamera(30,1,.1,20); cam.position.set(0,1.1,4.2); cam.lookAt(0,.85,0);
-  for(const [k] of ANIMALS){ const a=makeAnimal(k); a.rotation.y=-.3; sc.add(a); r.clear(); r.render(sc,cam); thumbs[k]=cv.toDataURL(); sc.remove(a); }
+  for(const [k] of [...ANIMALS, ...PEOPLE]){ const a=makeAnimal(k); a.rotation.y=-.3; sc.add(a); r.clear(); r.render(sc,cam); thumbs[k]=cv.toDataURL(); sc.remove(a); }
   r.dispose();
 }
 const thumb = k => thumbs[k] || '';
@@ -585,6 +649,7 @@ function animalPicker(cur, done, inSheet){
   let sel = cur && !taken.has(cur) ? cur : null;
   const html = `<h2>動物を選んでください</h2><p class="note">ほかの人が使っている動物は選べません。</p>
     <div class="grid">${ANIMALS.map(([k,n])=>`<button class="pick" data-k="${k}" aria-pressed="${k===sel}" ${taken.has(k)?'disabled':''}><img src="${thumb(k)}" alt="">${n}</button>`).join('')}</div>
+    <h3>似顔アバター</h3><div class="grid">${PEOPLE.map(([k,n])=>`<button class="pick" data-k="${k}" aria-pressed="${k===sel}" ${taken.has(k)?'disabled':''}><img src="${thumb(k)}" alt="">${n}</button>`).join('')}</div>
     <button class="btn pri wide" id="apOk" style="margin-top:14px" ${sel?'':'disabled'}>これにする</button>`;
   const host = inSheet ? (openSheet(html,'animal'), $('#sheetBody')) : ($('#gateBody').innerHTML = html, $('#gateBody'));
   host.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{ sel=b.dataset.k; host.querySelectorAll('.pick').forEach(x=>x.setAttribute('aria-pressed',x===b)); host.querySelector('#apOk').disabled=false; });
