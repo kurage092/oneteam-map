@@ -558,13 +558,19 @@ $('#sheetX').onclick = ()=>{ if(sheetState.kind==='add') draft=null; closeSheet(
 $('#listBtn').onclick = listSheet; $('#memBtn').onclick = memberSheet; $('#setBtn').onclick = settingsSheet; $('#meChip').onclick = memberSheet;
 $('#homeBtn').onclick = ()=>{ const s=D().settings; map.flyTo({center:[s.officeLng,s.officeLat], zoom:13.6, pitch:50}); };
 
+// 地図の読み込みとデータの読み込みは、どちらが先に終わってもよいようにする
+let mapLoaded=false, dataReady=false;
+function onMapLoad(){ if(mapReady || !dataReady) return; mapReady=true; map.addLayer(avatarLayer); const s=D().settings; map.jumpTo({center:[s.officeLng,s.officeLat]}); refresh(); }
+map.on('load', ()=>{ mapLoaded=true; onMapLoad(); });
+
 (async()=>{
   buildThumbs();
   try { await store.init(); }
   catch(e){ console.error(e); $('#gate').style.display='flex'; $('#gateBody').innerHTML='<h2 style="margin-top:0">データを読み込めませんでした</h2><p class="note">通信状態を確かめて、ページを読み込み直してください。続く場合は、下の文字を管理者に伝えてください。</p><p class="note" id="errDetail" style="word-break:break-all"></p>'; $('#errDetail').textContent = String(e && (e.message || e.code || JSON.stringify(e)) || e); return; }
   $('#demoBadge').hidden = !(store instanceof LocalStore);
   store.onChange(refresh);
-  map.on('load', ()=>{ mapReady=true; map.addLayer(avatarLayer); const s=D().settings; map.jumpTo({center:[s.officeLng,s.officeLat]}); refresh(); });
+  dataReady = true;
+  if(mapLoaded) onMapLoad();
   let saved=null; try{ saved = localStorage.getItem(ME_KEY); }catch{}
   const m = saved && memberOf(saved);
   if(m) enter(m); else gate();
