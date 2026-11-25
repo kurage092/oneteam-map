@@ -20,45 +20,69 @@ button,input,select{font:inherit;color:inherit}
 #map{position:fixed;inset:0}
 .top{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:10px;right:10px;display:flex;gap:8px;align-items:center;z-index:5;pointer-events:none}
 .top>*{pointer-events:auto}
-.chip{display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:999px;padding:4px 14px 4px 4px;box-shadow:0 2px 10px #0002;border:0;min-height:44px;cursor:pointer;font-weight:800}
+.chip{display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:999px;padding:4px 14px 4px 4px;box-shadow:0 2px 10px #0002;border:0;min-height:44px;cursor:pointer;font-weight:600}
 .chip img{width:36px;height:36px;border-radius:50%;background:#f1f4f5}
-.brand{font-weight:800;background:var(--bg);border-radius:999px;padding:8px 14px;box-shadow:0 2px 10px #0002;font-size:15px}
+.brand{font-weight:600;background:var(--bg);border-radius:999px;padding:8px 14px;box-shadow:0 2px 10px #0002;font-size:15px}
 .sp{flex:1}
-.ib{width:44px;height:44px;border-radius:50%;border:0;background:var(--bg);box-shadow:0 2px 10px #0002;font-weight:800;cursor:pointer}
+.ib{width:44px;height:44px;border-radius:50%;border:0;background:var(--bg);box-shadow:0 2px 10px #0002;font-weight:600;cursor:pointer}
 .demo{position:fixed;top:calc(env(safe-area-inset-top) + 62px);left:10px;z-index:4;background:#1d2a33e6;color:#fff;font-size:12px;border-radius:10px;padding:4px 10px}
-.fab{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom) + 84px);z-index:5;height:56px;padding:0 22px;border-radius:28px;border:0;background:var(--acc);color:#fff;font-weight:800;font-size:17px;box-shadow:0 6px 18px #e8533f66;cursor:pointer}
-.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:8px;padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(#fff0,#fffd 30%)}
-.bar button{flex:1;min-height:48px;border-radius:14px;border:1px solid var(--line);background:#fff;font-weight:800;cursor:pointer}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--bg);border-radius:var(--r) var(--r) 0 0;box-shadow:0 -6px 30px #0003;max-height:78vh;overflow:auto;padding:8px 18px calc(env(safe-area-inset-bottom) + 18px);transform:translateY(105%);transition:transform .25s ease}
-.sheet.open{transform:none}
-.x{position:absolute;right:10px;top:8px;width:44px;height:44px;border-radius:50%;border:0;background:#eef1f3;font-size:22px;cursor:pointer}
+.fab{position:fixed;right:16px;bottom:calc(var(--sh,168px) + 16px);transition:bottom .25s ease,opacity .2s;z-index:5;height:56px;padding:0 22px;border-radius:28px;border:0;background:var(--acc);color:#fff;font-weight:600;font-size:17px;box-shadow:0 6px 18px #e8533f66;cursor:pointer}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--bg);border-radius:var(--r) var(--r) 0 0;box-shadow:0 -4px 24px #0002;height:168px;display:none;flex-direction:column;transition:height .25s ease,transform .25s ease}
+.sheet.on{display:flex}.sheet.drag{transition:none}.sheet.hide{transform:translateY(110%)}
+.shead{flex:none;position:relative;padding:8px 16px 0;touch-action:none;cursor:grab}
+.tabs{display:flex;gap:24px;border-bottom:1px solid var(--line);padding-right:48px}
+.tabs button{border:0;background:none;padding:8px 0;min-height:48px;font-weight:600;color:var(--sub);border-bottom:3px solid transparent;margin-bottom:-1px;cursor:pointer}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink)}
+.sheet.detail .tabs{display:none}.sheet:not(.detail) .x{display:none}.sheet.detail .shead{min-height:56px}
+#sheetBody{flex:1;overflow:auto;overscroll-behavior:contain;padding:8px 16px calc(env(safe-area-inset-bottom) + 24px)}
+.mapbtn{position:fixed;right:16px;bottom:calc(var(--sh,168px) + 88px);z-index:5;font-size:13px;transition:bottom .25s ease,opacity .2s}
+.full .fab,.full .mapbtn{opacity:0;pointer-events:none}
+.maplibregl-ctrl-bottom-right{bottom:var(--sh,168px)!important;transition:bottom .25s ease}
+@media (min-width:768px){.sheet{left:16px;right:auto;width:440px;bottom:16px;border-radius:var(--r)}}
+.undo{position:fixed;left:16px;right:16px;bottom:calc(var(--sh,168px) + 16px);z-index:30;display:none;align-items:center;gap:16px;background:var(--ink);color:#fff;border-radius:12px;padding:8px 8px 8px 16px;max-width:440px}
+.undo.on{display:flex}.undo span{flex:1;font-size:14px}.undo button{border:0;background:none;color:#ffd1c8;font-weight:600;min-height:44px;padding:0 8px;cursor:pointer}
+.ltools{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.ltools select{width:auto;min-height:40px;flex:1;font-size:14px}
+.tbl{overflow-x:auto;margin:8px 0}
+.tbl table{border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:4px;text-align:center;min-width:56px;height:48px}
+.tbl th:first-child,.tbl td:first-child{text-align:start;position:sticky;left:0;background:var(--bg);min-width:104px;padding-left:0}
+.tbl td:first-child{display:flex;align-items:center;gap:8px}.tbl td:first-child img{width:32px;height:32px;border-radius:50%;background:#f1f4f5}
+.tbl .me td{background:#fff7f5}.tbl .me td:first-child{background:#fff7f5}
+.tbl .cell{width:44px;height:40px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:18px;font-weight:600;cursor:pointer}
+.tbl .cell.o{background:var(--acc);border-color:var(--acc);color:#fff}
+.a-o{color:var(--acc);font-weight:600}.a-t{color:#9a5a00}.a-x{color:var(--sub)}
+.tbl .fin{background:#e9f7f0!important}
+.tbl tfoot td{border-bottom:0;font-weight:600}
+.x{position:absolute;right:8px;top:8px;width:44px;height:44px;border-radius:50%;border:0;background:#eef1f3;font-size:22px;cursor:pointer}
 .sheet h2{padding-right:48px}
-.grip{width:44px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 10px}
-.sheet h2{font-size:22px;line-height:1.2;margin:4px 0 6px}
-.sheet h3{font-size:15px;margin:16px 0 6px;color:var(--sub)}
+.grip{width:48px;height:16px;margin:0 auto;position:relative;cursor:pointer}.grip::after{content:"";position:absolute;left:4px;right:4px;top:6px;height:4px;border-radius:2px;background:#cfd6db}
+.sheet h2{font-size:20px;line-height:1.4;margin:0 0 8px}
+.sheet h3{font-size:14px;margin:24px 0 8px;color:var(--sub)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.btn{min-height:48px;border-radius:14px;border:0;padding:0 18px;font-weight:800;cursor:pointer;background:#eef1f3}
+.btn{min-height:48px;border-radius:14px;border:0;padding:0 18px;font-weight:600;cursor:pointer;background:#eef1f3}
 .btn.pri{background:var(--acc);color:#fff}
 .btn.wish{background:var(--wish);color:#fff}
 .btn.done{background:var(--done);color:#fff}
 .btn.ghost{background:none;border:1px solid var(--line)}
 .btn.wide{width:100%}
 .btn:disabled{opacity:.45}
-label.f{display:block;margin:12px 0 4px;font-weight:800;font-size:14px}
+label.f{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
 input[type=text],input[type=url],input[type=password],select{width:100%;min-height:48px;border-radius:12px;border:1px solid #cfd6db;padding:0 12px;font-size:16px;background:#fff}
 :focus-visible{outline:3px solid #1d77d2;outline-offset:2px}
-.tag{display:inline-block;font-size:13px;font-weight:800;border-radius:999px;padding:2px 10px;background:#eef1f3}
+.tag{display:inline-block;font-size:13px;font-weight:600;border-radius:999px;padding:2px 10px;background:#eef1f3}
+.list .tag{min-width:4.5em;text-align:center;flex:none}
 .tag.wish{background:#fdebd0;color:#9a5a00}.tag.visited{background:#d5f0e3;color:#16613f}
 .faces{display:flex;flex-wrap:wrap;gap:6px}
 .face{display:flex;flex-direction:column;align-items:center;width:64px;font-size:12px;text-align:center}
 .face img{width:52px;height:52px;border-radius:50%;background:#f1f4f5}
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.pick{border:2px solid transparent;border-radius:14px;background:#f1f4f5;padding:4px;cursor:pointer;font-size:12px;font-weight:800}
+.pick{border:2px solid transparent;border-radius:14px;background:#f1f4f5;padding:4px;cursor:pointer;font-size:12px;font-weight:600}
 .pick img{width:100%;aspect-ratio:1;display:block}
 .pick[aria-pressed=true]{border-color:var(--acc);background:#fde7e3}
 .pick:disabled{opacity:.3}
 .list{list-style:none;margin:0;padding:0}
-.list li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.list li{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
 .list li button{flex:1;text-align:start;background:none;border:0;padding:0;cursor:pointer;min-height:44px}
 .list img{width:44px;height:44px;border-radius:50%;background:#f1f4f5}
 .note{font-size:13px;color:var(--sub)}
@@ -73,17 +97,17 @@ input[type=text],input[type=url],input[type=password],select{width:100%;min-heig
 .pin b{background:#fff;border-radius:10px;padding:2px 8px;font-size:12px;box-shadow:0 2px 6px #0003;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
 .pin i{width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);margin-top:3px;border:2px solid #fff;box-shadow:0 1px 4px #0005}
 .pin.wish i{background:var(--wish)}.pin.visited i{background:var(--done)}
-.office{background:var(--ink);color:#fff;border-radius:10px;padding:3px 9px;font-size:12px;font-weight:800;box-shadow:0 2px 6px #0004}
+.office{background:var(--ink);color:#fff;border-radius:10px;padding:3px 9px;font-size:12px;font-weight:600;box-shadow:0 2px 6px #0004}
 #cross{position:fixed;left:50%;top:50%;width:40px;height:40px;margin:-40px 0 0 -20px;z-index:6;display:none;pointer-events:none}
 #pickbar{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 16px);z-index:7;display:none;gap:8px;background:#fff;border-radius:16px;padding:10px;box-shadow:0 4px 20px #0003;align-items:center}
-#pickbar p{flex:1;margin:0;font-size:14px;font-weight:800}
+#pickbar p{flex:1;margin:0;font-size:14px;font-weight:600}
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 70px);transform:translateX(-50%);z-index:30;background:var(--ink);color:#fff;border-radius:12px;padding:8px 16px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
 .maplibregl-ctrl-attrib{font-size:10px}
 .bar button.hot{background:var(--ink);color:#fff;border-color:var(--ink)}
-.mini{min-height:40px;border-radius:10px;border:1px solid var(--line);background:#fff;padding:0 12px;font-weight:800;font-size:14px;cursor:pointer;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center}
+.mini{min-height:40px;border-radius:10px;border:1px solid var(--line);background:#fff;padding:0 12px;font-weight:600;font-size:14px;cursor:pointer;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center}
 .seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.seg button{width:44px;min-height:44px;border:0;background:#fff;font-size:18px;font-weight:800;cursor:pointer}
+.seg button{width:44px;min-height:44px;border:0;background:#fff;font-size:18px;font-weight:600;cursor:pointer}
 .seg button+button{border-left:1px solid var(--line)}
 .seg button[aria-pressed=true]{background:var(--acc);color:#fff}
 .list li .mini{flex:none;border:1px solid var(--line);background:#fff;padding:0 12px;text-align:center}
@@ -98,8 +122,8 @@ input[type=text],input[type=url],input[type=password],select{width:100%;min-heig
 .card{border:1px solid var(--line);border-radius:16px;padding:12px}
 .lnk{display:flex;align-items:center;justify-content:center;text-decoration:none;color:inherit;margin-top:8px}
 .btn.pri.lnk{color:#fff}
-.big{font-size:26px;font-weight:800;margin:8px 0 0}
-.wheel{margin:14px 0;min-height:90px;border-radius:18px;background:#1d2a33;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-size:20px;font-weight:800;padding:10px}
+.big{font-size:26px;font-weight:600;margin:8px 0 0}
+.wheel{margin:14px 0;min-height:90px;border-radius:18px;background:#1d2a33;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-size:20px;font-weight:600;padding:10px}
 .wheel.hit{background:var(--acc)}
 textarea{width:100%;min-height:72px;border-radius:12px;border:1px solid #cfd6db;padding:10px;font:inherit;font-size:16px}
 @media (prefers-reduced-motion:reduce){.sheet{transition:none}}
@@ -116,20 +140,26 @@ textarea{width:100%;min-height:72px;border-radius:12px;border:1px solid #cfd6db;
 </div>
 <div class="demo" id="demoBadge" hidden>デモモード：データはこの端末だけに保存</div>
 <button class="fab" id="addBtn">＋ 店を登録</button>
-<div class="bar">
-  <button id="evBtn" class="hot">今月の会</button>
-  <button id="listBtn">店の一覧</button>
-  <button id="memBtn">メンバー</button>
-  <button id="homeBtn">会社</button>
-</div>
+<button class="ib mapbtn" id="homeBtn" aria-label="会社の場所に戻る">会社</button>
 
 <svg id="cross" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 38 C20 38 6 22 6 14 a14 14 0 0 1 28 0 C34 22 20 38 20 38Z" fill="#e8533f" stroke="#fff" stroke-width="2"/><circle cx="20" cy="14" r="5" fill="#fff"/></svg>
 <div id="pickbar"><p id="pickMsg">地図を動かして位置を合わせてください</p><button class="btn ghost" id="pickCancel">やめる</button><button class="btn pri" id="pickOk">ここにする</button></div>
 
-<section class="sheet" id="sheet" aria-live="polite"><div class="grip"></div><button class="x" id="sheetX" aria-label="閉じる">×</button><div id="sheetBody"></div></section>
+<section class="sheet" id="sheet" aria-live="polite">
+  <div class="shead" id="shead"><div class="grip" id="grip" role="button" tabindex="0" aria-label="パネルの高さを変える"></div>
+    <nav class="tabs" role="tablist"><button role="tab" data-tab="event" id="evBtn">今月の会</button><button role="tab" data-tab="list" id="listBtn">店</button><button role="tab" data-tab="members" id="memBtn">メンバー</button></nav>
+    <button class="x" id="sheetX" aria-label="閉じる">×</button></div>
+  <div id="sheetBody"></div></section>
+<div class="undo" id="undo" role="status"><span id="undoMsg"></span><button id="undoBtn">元に戻す</button></div>
 <div id="gate"><div class="card" id="gateBody"></div></div>
 <div class="toast" id="toast"></div>
 
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#e8533f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ワンチーム">
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}
 </script>
@@ -209,7 +239,7 @@ class SupaStore {
     this.d = {
       settings:{passHash:st.pass_hash||null, officeLat:st.office_lat??DEFAULT_OFFICE.lat, officeLng:st.office_lng??DEFAULT_OFFICE.lng, hpKey:st.hp_key||'', stations:st.stations||[]},
       members:(m.data||[]).map(x=>({id:x.id,nickname:x.nickname,animal:x.animal,orderNo:x.order_no,dislikes:x.dislikes||''})),
-      restaurants:(r.data||[]).map(x=>({id:x.id,name:x.name,url:x.url,genre:x.genre,lat:x.lat,lng:x.lng,status:x.status,createdBy:x.created_by,budget:x.budget})),
+      restaurants:(r.data||[]).map(x=>({id:x.id,name:x.name,url:x.url,genre:x.genre,lat:x.lat,lng:x.lng,status:x.status,createdBy:x.created_by,budget:x.budget,createdAt:x.created_at})),
       events:ev.data||[], event_dates:ed.data||[], date_answers:da.data||[],
       wishes:(w.data||[]).map(x=>({r:x.restaurant_id,m:x.member_id})),
       visits:(v.data||[]).map(x=>({r:x.restaurant_id,m:x.member_id}))};
@@ -597,13 +627,47 @@ function refresh(){
   if(sheetState.kind==='shop' && sheetState.id) openShop(sheetState.id, true);
   const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('#sheet') && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if(sheetState.kind==='event' && !typing) eventSheet();
+  if(sheetState.kind==='list' && !typing) listSheet();
+  if(sheetState.kind==='members') memberSheet();
 }
 
 /* ============ シート ============ */
+/* 下から引き出すパネル（Googleマップ型）。高さは3段階：のぞく／半分／全体 */
 const sheetState = {kind:null,id:null};
-function openSheet(html, kind=null, id=null){ $('#sheetBody').innerHTML = html; $('#sheet').classList.add('open'); sheetState.kind=kind; sheetState.id=id; }
-function closeSheet(){ $('#sheet').classList.remove('open'); sheetState.kind=null; sheetState.id=null; }
-map.on('click', ()=>{ if(!picking) closeSheet(); });
+const TABS = {event:()=>{ viewMonth=monthKey(); eventSheet(); }, list:()=>listSheet(), members:()=>memberSheet()};
+let tab='event', snap='peek';
+const snapH = s => s==='peek' ? 232 : s==='half' ? Math.round(innerHeight*.5) : Math.round(innerHeight*.88);
+function setSnap(sn){ snap=sn; const h=snapH(sn); $('#sheet').style.height=h+'px';
+  document.documentElement.style.setProperty('--sh', (innerWidth>=768?16:0)+h+'px'); document.body.classList.toggle('full', sn==='full'); }
+function openSheet(html, kind=null, id=null){
+  const sh=$('#sheet'), isTab = kind in TABS || kind==='event-missing';
+  const same = sheetState.kind===kind && sheetState.id===id;
+  const top = same ? $('#sheetBody').scrollTop : 0;
+  $('#sheetBody').innerHTML = html; sh.classList.add('on'); sh.classList.toggle('detail', !isTab);
+  if(isTab){ tab = kind==='event-missing'?'event':kind; document.querySelectorAll('.tabs [data-tab]').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.tab===tab))); }
+  sheetState.kind=kind; sheetState.id=id; $('#sheetBody').scrollTop = top;
+  if(!same && !isTab && snap==='peek') setSnap(['add','settings','visit','animal','suggest','roulette'].includes(kind)?'full':'half');
+}
+function showTab(t, grow){ tab=t; TABS[t](); if(grow && snap==='peek') setSnap('half'); }
+function closeSheet(){ showTab(tab); }
+map.on('click', ()=>{ if(picking) return; if($('#sheet').classList.contains('detail')) closeSheet(); setSnap('peek'); });
+// つまみ部分を上下にドラッグして高さを変える。軽くタップすると一段ずつ切り替え
+(()=>{ const sh=$('#sheet'), hd=$('#shead'); let y0=null, h0=0, moved=false;
+  hd.addEventListener('pointerdown', e=>{ y0=e.clientY; h0=sh.getBoundingClientRect().height; moved=false; });
+  addEventListener('pointermove', e=>{ if(y0==null) return; const dy=e.clientY-y0; if(Math.abs(dy)>6){ moved=true; sh.classList.add('drag'); }
+    if(moved) sh.style.height = Math.min(snapH('full'), Math.max(120, h0-dy))+'px'; });
+  addEventListener('pointerup', e=>{ if(y0==null) return; const was=moved; y0=null; sh.classList.remove('drag'); if(!was) return;
+    const h=sh.getBoundingClientRect().height; const best=['peek','half','full'].sort((a,b)=>Math.abs(snapH(a)-h)-Math.abs(snapH(b)-h))[0]; setSnap(best);
+    hd.addEventListener('click', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true, once:true}); });
+  const cycle=()=>setSnap(snap==='peek'?'half':snap==='half'?'full':'peek');
+  $('#grip').addEventListener('click', cycle); $('#grip').addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); cycle(); } });
+  addEventListener('resize', ()=>setSnap(snap));
+})();
+document.querySelectorAll('.tabs [data-tab]').forEach(b=>b.onclick=()=>showTab(b.dataset.tab, true));
+// 取り消せる削除：すぐ消して「元に戻す」を5秒出す
+let undoFn=null, undoT=0;
+function offerUndo(msg, fn){ undoFn=fn; $('#undoMsg').textContent=msg; $('#undo').classList.add('on'); clearTimeout(undoT); undoT=setTimeout(()=>{ $('#undo').classList.remove('on'); undoFn=null; },5000); }
+$('#undoBtn').onclick = async()=>{ const f=undoFn; undoFn=null; $('#undo').classList.remove('on'); if(f) await f(); };
 const faces = list => list.length ? `<div class="faces">${list.map(m=>`<div class="face"><img src="${thumb(m.animal)}" alt=""><span>${esc(m.nickname)}</span></div>`).join('')}</div>` : '<p class="note">まだいません</p>';
 
 function openShop(id, keep){
@@ -626,7 +690,11 @@ function openShop(id, keep){
   on('editVisit', ()=>visitForm(id, visitors.map(m=>m.id)));
   on('unvisit', async()=>{ await store.setVisits(id,[]); await store.updateRestaurant(id,{status:'wish'}); });
   on('move', ()=>startPick('店の位置に合わせてください', [r.lng,r.lat], async c=>{ await store.updateRestaurant(id,{lat:c.lat,lng:c.lng}); openShop(id); }));
-  on('del', ()=>{ const b=$('#sheetBody [data-a=del]'); if(b.dataset.sure){ store.deleteRestaurant(id); closeSheet(); toast('削除しました'); } else { b.dataset.sure=1; b.textContent='もう一度押すと削除'; b.style.color='#c0392b'; } });
+  on('del', async()=>{ const d=D(), wish=d.wishes.filter(w=>w.r===id).map(w=>w.m), vis=d.visits.filter(v=>v.r===id).map(v=>v.m), evs=T('events').filter(e=>e.restaurant_id===id).map(e=>e.id), snap0={...r};
+    await store.deleteRestaurant(id); closeSheet();
+    offerUndo(`「${r.name}」を削除しました`, async()=>{ const n=await store.addRestaurant({name:snap0.name,url:snap0.url,genre:snap0.genre,lat:snap0.lat,lng:snap0.lng,budget:snap0.budget,createdBy:snap0.createdBy});
+      if(snap0.status==='visited'){ await store.updateRestaurant(n.id,{status:'visited'}); await store.setVisits(n.id,vis); }
+      for(const m of wish) await store.setWish(n.id,m,true); for(const e of evs) await store.upd('events',e,{restaurant_id:n.id}); openShop(n.id); }); });
 }
 
 function visitForm(id, pre){
@@ -682,26 +750,37 @@ function addForm(){
 /* ---- 地図の中央で位置を決めるモード ---- */
 let picking = null;
 function startPick(msg, at, ok, cancel){
-  closeSheet(); picking = {ok, cancel};
+  picking = {ok, cancel};
   $('#pickMsg').textContent = msg; $('#cross').style.display='block'; $('#pickbar').style.display='flex';
-  document.querySelectorAll('.fab,.bar').forEach(e=>e.style.display='none');
+  document.querySelectorAll('.fab,.mapbtn').forEach(e=>e.style.display='none'); $('#sheet').classList.add('hide');
   if(at) map.easeTo({center:at, zoom:Math.max(map.getZoom(),15.5)});
 }
-function endPick(){ $('#cross').style.display='none'; $('#pickbar').style.display='none'; document.querySelectorAll('.fab,.bar').forEach(e=>e.style.display=''); }
+function endPick(){ $('#cross').style.display='none'; $('#pickbar').style.display='none'; document.querySelectorAll('.fab,.mapbtn').forEach(e=>e.style.display=''); $('#sheet').classList.remove('hide'); }
 $('#pickOk').onclick = ()=>{ const c=map.getCenter(), p=picking; picking=null; endPick(); p.ok({lat:+c.lat.toFixed(6), lng:+c.lng.toFixed(6)}); };
 $('#pickCancel').onclick = ()=>{ const p=picking; picking=null; endPick(); p.cancel && p.cancel(); };
 
 /* ---- 一覧・メンバー・設定 ---- */
+const listOpt = {sort:'wish', show:'all', genre:''};
 function listSheet(){
-  const rs = [...D().restaurants].sort((a,b)=>(a.status>b.status?-1:1) || wishersOf(b.id).length-wishersOf(a.id).length);
-  openSheet(`<h2>店の一覧</h2>${rs.length?`<ul class="list">${rs.map(r=>`<li><span class="tag ${r.status}">${r.status==='visited'?'行った':'行きたい'}</span><button data-id="${esc(r.id)}"><b>${esc(r.name)}</b><br><span class="note">${esc(r.genre||'')}　${r.status==='visited'?`${visitorsOf(r.id).length}人で行った`:`行きたい ${wishersOf(r.id).length}人`}</span></button></li>`).join('')}</ul>`:'<p class="note">まだ店がありません。右下の「店を登録」から追加してください。</p>'}`,'list');
+  const all = D().restaurants, o = listOpt;
+  const genres = [...new Set(all.map(r=>r.genre).filter(Boolean))];
+  let rs = all.filter(r=>(o.show==='all'||r.status===o.show) && (!o.genre||r.genre===o.genre));
+  const key = { wish:r=>-wishersOf(r.id).length, cheap:r=>r.budget??1e9, new:r=>-(r.createdAt?Date.parse(r.createdAt):all.indexOf(r)) }[o.sort];
+  rs = [...rs].sort((a,b)=>(a.status===b.status?0:a.status==='wish'?-1:1) || key(a)-key(b));
+  const sel = (id,label,opts,v)=>`<select id="${id}" aria-label="${label}">${opts.map(([k,t])=>`<option value="${esc(k)}" ${k===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`;
+  openSheet(`<div class="ltools">${sel('lSort','並び順',[['wish','行きたい人が多い順'],['cheap','予算が安い順'],['new','新しく登録した順']],o.sort)}
+      ${sel('lShow','表示',[['all','すべて'],['wish','行きたい'],['visited','行った']],o.show)}
+      ${genres.length?sel('lGenre','ジャンル',[['','ジャンルすべて'],...genres.map(g=>[g,g])],o.genre):''}</div>
+    ${rs.length?`<ul class="list">${rs.map(r=>`<li><span class="tag ${r.status}">${r.status==='visited'?'行った':'行きたい'}</span><button data-id="${esc(r.id)}"><b>${esc(r.name)}</b><br><span class="note">${esc(r.genre||'ジャンル未設定')}${r.budget?'　1人'+yen(r.budget):''}　${r.status==='visited'?`${visitorsOf(r.id).length}人で行った`:`行きたい ${wishersOf(r.id).length}人`}</span></button></li>`).join('')}</ul>`
+      : `<p class="note">${all.length?'条件に合う店はありません':'店はまだありません。右の「店を登録」から追加できます'}</p>`}`,'list');
   document.querySelectorAll('#sheetBody [data-id]').forEach(b=>b.onclick=()=>openShop(b.dataset.id));
+  [['lSort','sort'],['lShow','show'],['lGenre','genre']].forEach(([i,k])=>{ const e=$('#'+i); if(e) e.onchange=()=>{ listOpt[k]=e.value; listSheet(); }; });
 }
 function memberSheet(){
   const ms = D().members.map(m=>({m, w:D().wishes.filter(x=>x.m===m.id).length, v:D().visits.filter(x=>x.m===m.id).length}));
   const rot = rotation(), pos = id => rot.findIndex(x=>x.id===id);
   ms.sort((a,b)=>pos(a.m.id)-pos(b.m.id));
-  openSheet(`<h2>メンバー（${ms.length}人）</h2><p class="note">上から幹事の順番です。矢印で並べ替えられます。</p><ul class="list">${ms.map(({m,w,v},i)=>`<li><span class="note" style="width:1.6em;text-align:center">${i+1}</span><img src="${thumb(m.animal)}" alt=""><div style="flex:1"><b>${esc(m.nickname)}</b>${m.id===me.id?'（あなた）':''}<br><span class="note">${ANIMAL_NAME[m.animal]||''}　参加 ${v}回・行きたい ${w}店${m.dislikes?'<br>苦手：'+esc(m.dislikes):''}</span></div>
+  openSheet(`<p class="note">${ms.length}人。上から幹事の順番です。矢印で並べ替えられます。</p><ul class="list">${ms.map(({m,w,v},i)=>`<li><span class="note" style="width:1.6em;text-align:center">${i+1}</span><img src="${thumb(m.animal)}" alt=""><div style="flex:1"><b>${esc(m.nickname)}</b>${m.id===me.id?'（あなた）':''}<br><span class="note">${ANIMAL_NAME[m.animal]?ANIMAL_NAME[m.animal]+'　':''}参加 ${v}回・行きたい ${w}店${m.dislikes?'<br>苦手：'+esc(m.dislikes):''}</span></div>
     <button class="mini" data-up="${i}" aria-label="${esc(m.nickname)}を上へ" ${i?'':'disabled'}>↑</button><button class="mini" data-dn="${i}" aria-label="${esc(m.nickname)}を下へ" ${i<ms.length-1?'':'disabled'}>↓</button></li>`).join('')}</ul>`,'members');
   const move = async (i,j)=>{ const ids=ms.map(x=>x.m.id); [ids[i],ids[j]]=[ids[j],ids[i]]; for(let n=0;n<ids.length;n++) if(memberOf(ids[n]).orderNo!==n+1) await store.updateMember(ids[n],{orderNo:n+1}); memberSheet(); };
   document.querySelectorAll('#sheetBody [data-up]').forEach(b=>b.onclick=()=>move(+b.dataset.up,+b.dataset.up-1));
@@ -717,6 +796,7 @@ function settingsSheet(){
     <ul class="list">${(D().settings.stations||[]).map((st,i)=>`<li><div style="flex:1">${esc(st.name)}</div><button class="mini" data-st="${i}">消す</button></li>`).join('')}</ul>
     <div class="row" style="margin-top:6px"><input type="text" id="sStName" placeholder="駅名（例 新宿）" style="flex:1"><button class="btn" id="sStAdd">地図で場所を決める</button></div>
     <h3>合言葉</h3><label class="f" for="sPass">新しい合言葉</label><input type="text" id="sPass" autocomplete="off"><button class="btn wide" id="sPassOk" style="margin-top:8px">合言葉を変える</button>
+    <h3>ホーム画面に置く</h3>${standalone()?'<p class="note">ホーム画面から開いています。</p>':installEv?'<button class="btn wide" id="sInstall">ホーム画面に追加</button>':'<p class="note">iPhoneはSafariの共有ボタンから「ホーム画面に追加」、Androidはメニューから「アプリをインストール」を選ぶと、アプリのように全画面で開けます。</p>'}
     <h3>この端末</h3><div class="row"><button class="btn ghost" id="sOut">ログアウト</button>${store instanceof LocalStore?'<button class="btn ghost" id="sReset">見本データを最初に戻す</button>':''}</div>
     ${SUPABASE_URL?(DEMO?'<p style="margin-top:10px"><a href="./">本番のデータに戻る</a></p>':'<p style="margin-top:10px"><a href="./?demo">見本データで試す</a><br><span class="note">共有データには影響しません。</span></p>'):''}
     <p class="note" style="margin-top:14px">${store instanceof LocalStore?'デモモード：データはこの端末のブラウザだけに保存されます。':'共有モード：データはメンバー全員で共有されます。'}</p>`,'settings');
@@ -728,6 +808,7 @@ function settingsSheet(){
     startPick(name+'駅に合わせてください', null, async c=>{ await store.setSettings({stations:[...(D().settings.stations||[]), {name, lat:c.lat, lng:c.lng}]}); settingsSheet(); }, settingsSheet); };
   $('#sAnimal').onclick = ()=>animalPicker(me.animal, async k=>{ await store.updateMember(me.id,{animal:k}); closeSheet(); }, true);
   $('#sPassOk').onclick = async()=>{ const v=$('#sPass').value; if(v.trim().length<4){ toast('4文字以上にしてください'); return; } await store.setPass(await sha(v)); toast('合言葉を変えました。メンバーに伝えてください'); };
+  const ins=$('#sInstall'); if(ins) ins.onclick=async()=>{ installEv.prompt(); await installEv.userChoice; installEv=null; settingsSheet(); };
   $('#sOut').onclick = ()=>{ try{localStorage.removeItem(ME_KEY);}catch{} location.reload(); };
   const rs=$('#sReset'); if(rs) rs.onclick = async()=>{ await store.reset(); try{localStorage.removeItem(ME_KEY);}catch{} location.reload(); };
 }
@@ -787,10 +868,13 @@ function eventSheet(){
   const una = unanswered(ev), att = attendees(ev);
   const chk = [['日程を決める',!!fin],['店を決める',!!shop],['予約する',!!ev?.reserved],['LINEで知らせる',!!ev?.notified],['会計する',!!ev?.paid]];
   const mark = {o:'○',t:'△',x:'×'};
-  const dateRows = ds.map(d=>{ const a=answersOf(d.id), c=x=>a.filter(y=>y.ans===x).length, mine=ansOf(d.id,me.id);
-    return `<li class="drow${fin&&fin.id===d.id?' fin':''}"><div style="flex:1"><b>${dayLabel(d.day)}</b>${fin&&fin.id===d.id?' <span class="tag visited">決定</span>':''}<br><span class="note">○${c('o')} △${c('t')} ×${c('x')}</span></div>
-      <div class="seg" role="group" aria-label="${dayLabel(d.day)}の回答">${['o','t','x'].map(x=>`<button data-ans="${x}" data-d="${esc(d.id)}" aria-pressed="${mine===x}">${mark[x]}</button>`).join('')}</div>
-      ${isOrg?`<button class="mini" data-fix="${esc(d.id)}">${fin&&fin.id===d.id?'取消':'決定'}</button><button class="mini" data-rm="${esc(d.id)}" aria-label="候補日を消す">消す</button>`:''}</li>`; }).join('');
+  const rot = rotation();
+  const dateGrid = ds.length ? `<div class="tbl"><table><thead><tr><th scope="col"><span class="note">候補日</span></th>${ds.map(d=>`<th scope="col" class="${fin&&fin.id===d.id?'fin':''}">${dayLabel(d.day).replace(/（/,'<br>（')}${fin&&fin.id===d.id?'<br><span class="tag visited">決定</span>':''}</th>`).join('')}</tr></thead>
+    <tbody>${rot.map(m=>`<tr class="${m.id===me.id?'me':''}"><td><img src="${thumb(m.animal)}" alt=""><span>${esc(m.nickname)}</span></td>${ds.map(d=>{ const a=ansOf(d.id,m.id);
+      return `<td class="${fin&&fin.id===d.id?'fin':''}">${m.id===me.id?`<button class="cell ${a||''}" data-cyc="${esc(d.id)}" aria-label="${dayLabel(d.day)}の回答：${a?mark[a]:'未回答'}">${a?mark[a]:'－'}</button>`:a?`<span class="a-${a}">${mark[a]}</span>`:'<span class="note">－</span>'}</td>`; }).join('')}</tr>`).join('')}</tbody>
+    <tfoot><tr><td><span class="note">○の人数</span></td>${ds.map(d=>`<td>${answersOf(d.id).filter(y=>y.ans==='o').length}</td>`).join('')}</tr>
+    ${isOrg?`<tr><td><span class="note">幹事</span></td>${ds.map(d=>`<td><button class="mini" data-fix="${esc(d.id)}">${fin&&fin.id===d.id?'取消':'決定'}</button><br><button class="mini" data-rm="${esc(d.id)}" aria-label="${dayLabel(d.day)}を消す" style="margin-top:4px">消す</button></td>`).join('')}</tr>`:''}</tfoot></table></div>
+    <p class="note">自分の行のマスを押すと ○ → △ → × の順に変わります。</p>` : '';
   const dislikes = (att.length?att:D().members).filter(m=>m.dislikes).map(m=>`${esc(m.nickname)}：${esc(m.dislikes)}`);
   const total = ev?.total||'', head = ev?.headcount || att.length || '';
   const unit = ev?.round_unit || 100;
@@ -801,7 +885,7 @@ function eventSheet(){
     <div class="orgrow">${org?`<img src="${thumb(org.animal)}" alt=""><div style="flex:1"><span class="note">今月の幹事</span><br><b>${esc(org.nickname)}</b>${isOrg?'（あなた）':''}</div>`:'<div class="note" style="flex:1">メンバーがいません</div>'}
       ${next?`<div style="text-align:end"><span class="note">次の幹事</span><br><b>${esc(next.nickname)}</b></div>`:''}</div>
     ${isOrg?`<h3>幹事のチェックリスト</h3><ul class="checks">${chk.map(([t,on],i)=>`<li><label><input type="checkbox" data-ck="${i}" ${on?'checked':''} ${i<2?'disabled':''}> ${t}</label></li>`).join('')}</ul>`:''}
-    <h3>候補日</h3>${ds.length?`<ul class="list">${dateRows}</ul>`:'<p class="note">まだ候補日がありません。</p>'}
+    <h3>候補日</h3>${ds.length?dateGrid:'<p class="note">まだ候補日がありません。</p>'}
     ${una.length?`<p class="note">まだ答えていない人：${una.map(m=>esc(m.nickname)).join('、')}</p>`:''}
     ${isOrg?`<div class="row" style="margin-top:8px"><input type="date" id="evDay" style="flex:1"><button class="btn" id="evAdd">候補日を追加</button></div>
       ${ds.length?`<a class="btn ghost wide lnk" href="${lineShare(ask)}" target="_blank" rel="noopener">LINEで回答をお願いする</a>`:''}`:''}
@@ -822,7 +906,7 @@ function eventSheet(){
   const b = id => $('#'+id);
   b('evPrev').onclick=()=>{ viewMonth=addMonth(viewMonth,-1); eventSheet(); };
   b('evNext').onclick=()=>{ viewMonth=addMonth(viewMonth,1); eventSheet(); };
-  document.querySelectorAll('#sheetBody [data-ans]').forEach(x=>x.onclick=()=>store.ups('date_answers',{date_id:x.dataset.d, member_id:me.id, ans:x.dataset.ans},['date_id','member_id']));
+  document.querySelectorAll('#sheetBody [data-cyc]').forEach(x=>x.onclick=()=>{ const cur=ansOf(x.dataset.cyc,me.id); const nx={o:'t',t:'x',x:'o'}[cur]||'o'; store.ups('date_answers',{date_id:x.dataset.cyc, member_id:me.id, ans:nx},['date_id','member_id']); });
   document.querySelectorAll('#sheetBody [data-rm]').forEach(x=>x.onclick=async()=>{ if(ev.final_date_id===x.dataset.rm) await store.upd('events',ev.id,{final_date_id:null}); await store.del('date_answers',{date_id:x.dataset.rm}); await store.del('event_dates',{id:x.dataset.rm}); });
   document.querySelectorAll('#sheetBody [data-fix]').forEach(x=>x.onclick=()=>store.upd('events',ev.id,{final_date_id: ev.final_date_id===x.dataset.fix?null:x.dataset.fix}));
   document.querySelectorAll('#sheetBody [data-ck]').forEach(x=>x.onchange=async()=>{ const key=['','','reserved','notified','paid'][x.dataset.ck]; if(key) await store.upd('events',(await ensureEvent(k)).id,{[key]:x.checked}); });
@@ -945,14 +1029,13 @@ function whoAmI(){
 }
 function enter(m){
   me = m; try{ localStorage.setItem(ME_KEY, m.id); }catch{}
-  $('#gate').style.display='none'; refresh();
+  $('#gate').style.display='none'; setSnap('peek'); showTab('event'); refresh();
 }
 
 /* ============ 起動 ============ */
 $('#addBtn').onclick = ()=>addForm();
 $('#sheetX').onclick = ()=>{ if(sheetState.kind==='add') draft=null; closeSheet(); };
-$('#evBtn').onclick = ()=>{ viewMonth=monthKey(); eventSheet(); };
-$('#listBtn').onclick = listSheet; $('#memBtn').onclick = memberSheet; $('#setBtn').onclick = settingsSheet; $('#meChip').onclick = memberSheet;
+$('#setBtn').onclick = settingsSheet; $('#meChip').onclick = ()=>showTab('members', true);
 $('#homeBtn').onclick = ()=>{ const s=D().settings; map.flyTo({center:[s.officeLng,s.officeLat], zoom:13.6, pitch:50}); };
 
 // 地図の読み込みとデータの読み込みは、どちらが先に終わってもよいようにする
@@ -960,6 +1043,9 @@ let mapLoaded=false, dataReady=false;
 function onMapLoad(){ if(mapReady || !dataReady) return; mapReady=true; map.addLayer(avatarLayer); const s=D().settings; map.jumpTo({center:[s.officeLng,s.officeLat]}); refresh(); }
 map.on('load', ()=>{ mapLoaded=true; onMapLoad(); });
 
+if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+let installEv=null; addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); installEv=e; });
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 (async()=>{
   buildThumbs();
   try { await store.init(); }
