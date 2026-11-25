@@ -77,7 +77,7 @@ input[type=text],input[type=url],input[type=password],select{width:100%;min-heig
 :focus-visible{outline:3px solid #1d77d2;outline-offset:2px}
 .tag{display:inline-block;font-size:13px;font-weight:600;border-radius:999px;padding:2px 10px;background:#eef1f3}
 .list .tag{min-width:4.5em;text-align:center;flex:none}
-.tag.wish{background:#fdebd0;color:#9a5a00}.tag.visited{background:#d5f0e3;color:#16613f}
+.tag.wish{background:#fdebd0;color:#9a5a00}.tag.org{background:var(--ink);color:#fff}.tag.visited{background:#d5f0e3;color:#16613f}
 .faces{display:flex;flex-wrap:wrap;gap:6px}
 .face{display:flex;flex-direction:column;align-items:center;width:64px;font-size:12px;text-align:center}
 .face img{width:52px;height:52px;border-radius:50%;background:#f1f4f5}
@@ -266,6 +266,7 @@ class SupaStore {
   upd(t,id,p){ return this.run(this.sb.from(t).update(p).eq('id',id)); }
   del(t,f){ let q=this.sb.from(t).delete(); for(const [k,v] of Object.entries(f)) q=q.eq(k,v); return this.run(q); }
   ups(t,row){ return this.run(this.sb.from(t).upsert(row)); }
+  async rpc(fn,args){ const {data,error}=await this.sb.rpc(fn,args); if(error) throw error; return data; }
   updateRestaurant(id,p){ return this.run(this.sb.from('restaurants').update(p).eq('id',id)); }
   deleteRestaurant(id){ return this.run(this.sb.from('restaurants').delete().eq('id',id)); }
   setWish(r,m,on){ const t=this.sb.from('wishes'); return this.run(on ? t.upsert({restaurant_id:r,member_id:m}) : t.delete().eq('restaurant_id',r).eq('member_id',m)); }
@@ -494,6 +495,7 @@ function makeAnimal(kind){
 }
 
 let _qTex=null;
+const avatarSize = z => Math.min(1, Math.max(.3, (z-11.5)/3.5));   // 地図を引くとキャラを小さく（ズーム15で原寸）
 const _bub={};
 function bubble(text, x, y, z){ // 吹き出し（常に画面の方を向く板）
   if(!_bub[text]){ const c=document.createElement('canvas'); c.width=256; c.height=96; const g=c.getContext('2d');
@@ -587,8 +589,8 @@ const avatarLayer = {
       });
       if(r.status==='visited'){ // 旗と「楽しかった！」の吹き出し
         const pole = part('cy',0x666666,[0,22,-4],[.8,44,.8]); const flag = part('s',0xe8533f,[7,38,-4],[7,5,.6]); g.add(pole,flag); g.userData.flag=flag;
-        g.children[0].userData.head.parent.add(bubble('楽しかった！', 1.7, .9, 0)); }
-      else { g.userData.mode='invite'; g.children[0].userData.face=0; g.children[0].userData.head.parent.add(bubble('おいでよ！', 1.7, .9, 0)); }   // 提案した人が1人で手招き
+        const bb=bubble('楽しかった！', 1.7, .9, 0); g.children[0].userData.head.parent.add(bb); g.userData.bubbles=[bb]; }
+      else { g.userData.mode='invite'; g.children[0].userData.face=0; const bb=bubble('おいでよ！', 1.7, .9, 0); g.children[0].userData.head.parent.add(bb); g.userData.bubbles=[bb]; }   // 提案した人が1人で手招き
       this.scene.add(g); this.groups.set(r.id,g);
     }
     // 候補日にまだ答えていない人は、会社の前で「？」を出して待つ
@@ -610,7 +612,8 @@ const avatarLayer = {
     const z = map.getZoom(), t = performance.now()/1000;
     for(const g of this.groups.values()){
       const mpp = 40075016.686*Math.cos(g.userData.lat*Math.PI/180)/(512*2**z);
-      g.scale.setScalar(mpp);
+      g.scale.setScalar(mpp * avatarSize(z));
+      for(const b of g.userData.bubbles||[]) b.visible = z>=15;
       const party = g.userData.mode==='visited';
       for(const a of g.children){ const u=a.userData; if(!u.body) continue; const p=t*1+u.phase;
         if(g.userData.mode==='invite'){ // 提案者がこちらを向いて手招き（おいでよ）
@@ -755,25 +758,55 @@ function parseShopUrl(u){
   }catch{}
   return out;
 }
+// URLのページを読んで、店名と位置を探す（食べログ・ホットペッパー・Googleマップの短いリンク）
+async function lookupUrl(u){
+  if(!store.rpc) return {};
+  const d = await store.rpc('shop_page',{u}); if(!d || d.error) return {};
+  const out = parseShopUrl(d.url||u), b = d.body||'';
+  const pick = (...res)=>{ for(const re of res){ const m=b.match(re); if(m) return m; } return null; };
+  const ll = pick(/"latitude"\s*:\s*"?(-?\d{2}\.\d+)"?[^}]{0,120}?"longitude"\s*:\s*"?(-?\d{3}\.\d+)/, /center=(-?\d{2}\.\d+)(?:,|%2C)(-?\d{3}\.\d+)/, /[?&]ll=(-?\d{2}\.\d+),(-?\d{3}\.\d+)/,
+    /data-lat="(-?\d{2}\.\d+)"[^>]*data-lng="(-?\d{3}\.\d+)"/, /lat[=:]\s*"?(-?\d{2}\.\d{4,})"?[,&\s]+(?:lng|lon)[=:]\s*"?(-?\d{3}\.\d{4,})/, /@(-?\d{2}\.\d+),(-?\d{3}\.\d+)/);
+  if(ll && out.lat==null){ out.lat=+ll[1]; out.lng=+ll[2]; }
+  const t = pick(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/, /<title>([^<]+)<\/title>/);
+  if(t && !out.name) out.name = t[1].replace(/&amp;/g,'&').split(/ - | \| |（|\(|【/)[0].trim();
+  return out;
+}
+// 店名から位置を探す（ホットペッパー → だめなら地図の地名検索）
+async function findByName(name){
+  const s=D().settings;
+  try{ const r = await hpFetch({keyword:name, lat:s.officeLat, lng:s.officeLng, range:'5'}); if(r[0]) return {lat:+r[0].lat, lng:+r[0].lng, name:r[0].name}; }catch{}
+  try{ const v=`${s.officeLng-0.25},${s.officeLat+0.2},${s.officeLng+0.25},${s.officeLat-0.2}`;
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1&viewbox=${v}&q=${encodeURIComponent(name)}`).then(x=>x.json());
+    if(r[0]) return {lat:+r[0].lat, lng:+r[0].lon}; }catch{}
+  return null;
+}
 let draft = null;
 function addForm(){
   draft = draft || {url:'',name:'',genre:'',lat:null,lng:null};
   const pos = draft.lat!=null ? '位置：設定ずみ' : '位置：まだ決まっていません';
   openSheet(`<h2>お店を提案</h2><button class="btn ghost wide" id="fSearch">人数や予算から探す</button>
     <label class="f" for="fUrl">お店のURL（食べログ、Googleマップなど）</label><input type="url" id="fUrl" inputmode="url" placeholder="https://..." value="${esc(draft.url)}">
-    <p class="note" id="fHint">GoogleマップのURLなら、店名と位置を自動で入れます。</p>
+    <p class="note" id="fHint">食べログ・ホットペッパー・GoogleマップのURLなら、店名と位置を自動で入れます。</p>
     <label class="f" for="fName">店名</label><input type="text" id="fName" value="${esc(draft.name)}" maxlength="60">
     <label class="f" for="fGenre">ジャンル</label><select id="fGenre"><option value="">選んでください</option>${GENRES.map(g=>`<option ${g===draft.genre?'selected':''}>${g}</option>`).join('')}</select>
     <label class="f" for="fBud">1人あたりの予算の目安（円・任意）</label><input type="text" inputmode="numeric" id="fBud" value="${esc(draft.budget||'')}" placeholder="例 5000">
     <label class="f" for="fPitch">推しポイント（任意）</label><textarea id="fPitch" maxlength="200" placeholder="例 炭火の焼き鳥が絶品。個室があって8人まで入れます">${esc(draft.pitch||'')}</textarea>
-    <div class="row" style="margin-top:14px"><span class="note" id="fPos" style="flex:1">${pos}</span><button class="btn ghost" id="fPick">地図で位置を決める</button></div>
+    <div class="row" style="margin-top:16px"><span class="note" id="fPos" style="flex:1">${pos}</span><button class="btn ghost" id="fFind">店名で探す</button><button class="btn ghost" id="fPick">地図で決める</button></div>
     <p class="err" id="fErr"></p>
     <div class="row"><button class="btn ghost" id="fCancel">やめる</button><button class="btn pri" id="fOk" style="flex:1">提案する</button></div>`,'add');
   const sync = ()=>{ draft.url=$('#fUrl').value; draft.name=$('#fName').value; draft.genre=$('#fGenre').value; draft.budget=$('#fBud').value.replace(/[^\d]/g,''); draft.pitch=$('#fPitch').value; };
   $('#fUrl').addEventListener('input', ()=>{ sync(); const p=parseShopUrl(draft.url);
     if(p.name && !draft.name){ draft.name=p.name; $('#fName').value=p.name; }
     if(p.lat!=null){ draft.lat=p.lat; draft.lng=p.lng; $('#fPos').textContent='位置：URLから設定しました'; map.easeTo({center:[p.lng,p.lat]}); }
-    $('#fHint').textContent = p.lat!=null ? 'URLから位置を読み取りました。' : p.host ? 'このURLからは位置が分からないので、地図で位置を決めてください。' : 'GoogleマップのURLなら、店名と位置を自動で入れます。'; });
+    $('#fHint').textContent = p.lat!=null ? 'URLから位置を読み取りました。' : p.host ? 'お店のページを読んでいます…' : '食べログ・ホットペッパー・GoogleマップのURLなら、店名と位置を自動で入れます。';
+    if(p.lat==null && p.host){ const u=draft.url; lookupUrl(u).then(q=>{ if(draft?.url!==u) return;
+      if(q.name && !draft.name){ draft.name=q.name; $('#fName').value=q.name; }
+      if(q.lat!=null){ draft.lat=q.lat; draft.lng=q.lng; $('#fPos').textContent='位置：URLから設定しました'; map.easeTo({center:[q.lng,q.lat]}); $('#fHint').textContent='お店のページから位置を読み取りました。'; }
+      else $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }).catch(()=>{ $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }); } });
+  $('#fFind').onclick = async()=>{ sync(); if(!draft.name.trim()){ $('#fErr').textContent='先に店名を入れてください'; return; } $('#fFind').disabled=true;
+    const q = await findByName(draft.name.trim()); $('#fFind').disabled=false;
+    if(!q){ $('#fErr').textContent='見つかりませんでした。「地図で決める」で位置を合わせてください'; return; }
+    draft.lat=q.lat; draft.lng=q.lng; $('#fErr').textContent=''; $('#fPos').textContent='位置：店名から設定しました（違っていたら地図で直せます）'; map.easeTo({center:[q.lng,q.lat], zoom:Math.max(map.getZoom(),15)}); };
   $('#fPick').onclick = ()=>{ sync(); startPick('お店の場所に合わせてください', draft.lat!=null?[draft.lng,draft.lat]:null, c=>{ draft.lat=c.lat; draft.lng=c.lng; addForm(); }, addForm); };
   $('#fCancel').onclick = ()=>{ draft=null; closeSheet(); };
   $('#fOk').onclick = async()=>{ sync();
@@ -816,9 +849,9 @@ function listSheet(){
 }
 function memberSheet(){
   const ms = D().members.map(m=>({m, w:D().restaurants.filter(x=>x.createdBy===m.id&&x.status==='wish').length, v:D().visits.filter(x=>x.m===m.id).length}));
-  const rot = rotation(), pos = id => rot.findIndex(x=>x.id===id);
+  const rot = rotation(), pos = id => rot.findIndex(x=>x.id===id), orgNow = organizerFor(monthKey()), orgNext = organizerFor(addMonth(monthKey(),1));
   ms.sort((a,b)=>pos(a.m.id)-pos(b.m.id));
-  openSheet(`<p class="note">${ms.length}人。上から幹事の順番です。矢印で並べ替えられます。</p><ul class="list">${ms.map(({m,w,v},i)=>`<li><span class="note" style="width:1.6em;text-align:center">${i+1}</span><img src="${thumb(m.animal)}" alt=""><div style="flex:1"><b>${esc(m.nickname)}</b>${m.id===me.id?'（あなた）':''}<br><span class="note">${ANIMAL_NAME[m.animal]?ANIMAL_NAME[m.animal]+'　':''}参加 ${v}回・提案 ${w}店${m.dislikes?'<br>苦手：'+esc(m.dislikes):''}</span></div>
+  openSheet(`<p class="note">${ms.length}人。上から幹事の順番です。矢印で並べ替えられます。</p><ul class="list">${ms.map(({m,w,v},i)=>`<li><span class="note" style="width:1.6em;text-align:center">${i+1}</span><img src="${thumb(m.animal)}" alt=""><div style="flex:1"><b>${esc(m.nickname)}</b>${m.id===me.id?'（あなた）':''}${m.id===orgNow?.id?' <span class="tag org">今月の幹事</span>':m.id===orgNext?.id?' <span class="tag">次の幹事</span>':''}<br><span class="note">${ANIMAL_NAME[m.animal]?ANIMAL_NAME[m.animal]+'　':''}参加 ${v}回・提案 ${w}店${m.dislikes?'<br>苦手：'+esc(m.dislikes):''}</span></div>
     <button class="mini" data-up="${i}" aria-label="${esc(m.nickname)}を上へ" ${i?'':'disabled'}>↑</button><button class="mini" data-dn="${i}" aria-label="${esc(m.nickname)}を下へ" ${i<ms.length-1?'':'disabled'}>↓</button></li>`).join('')}</ul>`,'members');
   const move = async (i,j)=>{ const ids=ms.map(x=>x.m.id); [ids[i],ids[j]]=[ids[j],ids[i]]; for(let n=0;n<ids.length;n++) if(memberOf(ids[n]).orderNo!==n+1) await store.updateMember(ids[n],{orderNo:n+1}); memberSheet(); };
   document.querySelectorAll('#sheetBody [data-up]').forEach(b=>b.onclick=()=>move(+b.dataset.up,+b.dataset.up-1));
@@ -993,7 +1026,16 @@ function rouletteSheet(k){
 }
 
 /* ---- 店の自動提案（ホットペッパーグルメ グルメサーチAPI、JSONP） ---- */
-function hpFetch(params){
+async function hpFetch(params){
+  // ふつうはデータベース（Supabase）からホットペッパーを呼ぶ。ブラウザから直接だと通らないことがあるため
+  if(store.rpc){ let d; try{ d = await store.rpc('hp_search',{q:params}); }
+    catch(e){ throw new Error(/hp_search|function/.test(String(e.message||e)) ? 'データベースの追加設定（SQL）がまだです' : String(e.message||e)); }
+    if(d?.error) throw new Error(d.error==='no key'?'APIキーが入っていません':String(d.error));
+    if(d?.results?.error) throw new Error(d.results.error[0]?.message||'APIキーを確かめてください');
+    return d?.results?.shop||[]; }
+  return hpJsonp(params);
+}
+function hpJsonp(params){
   return new Promise((ok,ng)=>{ const cb='hp'+Math.random().toString(36).slice(2); const sc=document.createElement('script');
     const q=new URLSearchParams({key:D().settings.hpKey, format:'jsonp', callback:cb, count:'50', ...params});
     const to=setTimeout(()=>{ cleanup(); ng(new Error('timeout')); },10000);
@@ -1019,7 +1061,7 @@ function searchSheet(from, k=monthKey()){
   $('#sgGo').onclick=async()=>{ const bud=+$('#sgBud').value.replace(/[^\d]/g,'')||0, num=+$('#sgNum').value.replace(/[^\d]/g,'')||1, gen=$('#sgGenre').value, room=$('#sgRoom').checked; const out=$('#sgOut'); out.innerHTML='<p class="note">探しています…</p>';
     const spots=[{lat:s.officeLat,lng:s.officeLng}, ...(s.stations||[])];
     let shops=[]; try{ const rs=await Promise.all(spots.map(p=>hpFetch({lat:p.lat,lng:p.lng,range:'3',party_capacity:String(num),...(room?{private_room:'1'}:{})}))); shops=rs.flat(); }
-    catch(e){ out.innerHTML=`<p class="err">お店を取得できませんでした（${esc(e.message)}）。APIキーを確かめてください。</p>`; return; }
+    catch(e){ out.innerHTML=`<p class="err">お店を取得できませんでした（${esc(e.message)}）。</p>`; return; }
     const seen=new Set(); shops=shops.filter(x=>!seen.has(x.id)&&seen.add(x.id));
     const vis=D().restaurants.filter(r=>r.status==='visited'), wish=D().restaurants.filter(r=>r.status==='wish');
     const people=(att.length?att:D().members); const ng=people.flatMap(m=>(m.dislikes||'').split(/[、,，\s・\/]+/)).map(x=>x.trim()).filter(x=>x.length>=2);

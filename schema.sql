@@ -45,3 +45,32 @@ grant select, insert, update, delete on settings, members, restaurants, wishes, 
 -- 6. 店の推しポイント
 alter table restaurants add column if not exists pitch text;
 notify pgrst, 'reload schema';
+
+-- 7. 店を探す・URLから位置を読む（データベースから外のサイトを呼ぶ）
+create extension if not exists http with schema extensions;
+create or replace function public.hp_search(q jsonb) returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare k text; u text; r extensions.http_response;
+begin
+  select hp_key into k from settings where id = 1;
+  if coalesce(k,'') = '' then return jsonb_build_object('error','no key'); end if;
+  u := 'https://webservice.recruit.co.jp/hotpepper/gourmet/v1/?format=json&count=50&key=' || extensions.urlencode(k)
+    || coalesce((select string_agg('&' || key || '=' || extensions.urlencode(value), '') from jsonb_each_text(q) where key in ('lat','lng','range','party_capacity','private_room','keyword')), '');
+  r := extensions.http_get(u);
+  return r.content::jsonb;
+end $$;
+create or replace function public.shop_page(u text) returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare r extensions.http_response; n int := 0; loc text;
+begin
+  loop
+    if u !~ '^https://([a-z0-9-]+\.)*(tabelog\.com|hotpepper\.jp|goo\.gl|google\.com|google\.co\.jp)/' then return jsonb_build_object('error','host'); end if;
+    r := extensions.http_get(u);
+    if r.status between 300 and 399 and n < 4 then
+      select h.value into loc from unnest(r.headers) h where lower(h.field) = 'location';
+      if loc is null then exit; end if;
+      u := loc; n := n + 1;
+    else exit; end if;
+  end loop;
+  return jsonb_build_object('url', u, 'status', r.status, 'body', left(r.content, 500000));
+end $$;
+grant execute on function public.hp_search(jsonb), public.shop_page(text) to anon, authenticated;
+notify pgrst, 'reload schema';
