@@ -80,6 +80,28 @@ input[type=text],input[type=url],input[type=password],select{width:100%;min-heig
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 70px);transform:translateX(-50%);z-index:30;background:var(--ink);color:#fff;border-radius:12px;padding:8px 16px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
 .maplibregl-ctrl-attrib{font-size:10px}
+.bar button.hot{background:var(--ink);color:#fff;border-color:var(--ink)}
+.mini{min-height:40px;border-radius:10px;border:1px solid var(--line);background:#fff;padding:0 12px;font-weight:800;font-size:14px;cursor:pointer;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center}
+.seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{width:44px;min-height:44px;border:0;background:#fff;font-size:18px;font-weight:800;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--acc);color:#fff}
+.list li .mini{flex:none;border:1px solid var(--line);background:#fff;padding:0 12px;text-align:center}
+.list li .seg button{flex:none;width:44px;text-align:center;background:#fff}
+.list li .seg button[aria-pressed=true]{background:var(--acc);color:#fff}
+.drow>div:first-child{min-width:120px}
+.evnav{margin-right:52px;justify-content:space-between}
+.drow{flex-wrap:wrap}.drow.fin{background:#eefaf4}
+.orgrow{display:flex;align-items:center;gap:10px;margin:10px 0;padding:10px;border-radius:14px;background:#f5f7f8}
+.orgrow img{width:52px;height:52px;border-radius:50%;background:#fff}
+.checks{list-style:none;margin:0;padding:0}.checks label{display:flex;align-items:center;gap:10px;min-height:40px}.checks input{width:22px;height:22px}
+.card{border:1px solid var(--line);border-radius:16px;padding:12px}
+.lnk{display:flex;align-items:center;justify-content:center;text-decoration:none;color:inherit;margin-top:8px}
+.btn.pri.lnk{color:#fff}
+.big{font-size:26px;font-weight:800;margin:8px 0 0}
+.wheel{margin:14px 0;min-height:90px;border-radius:18px;background:#1d2a33;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-size:20px;font-weight:800;padding:10px}
+.wheel.hit{background:var(--acc)}
+textarea{width:100%;min-height:72px;border-radius:12px;border:1px solid #cfd6db;padding:10px;font:inherit;font-size:16px}
 @media (prefers-reduced-motion:reduce){.sheet{transition:none}}
 </style>
 </head>
@@ -95,9 +117,10 @@ input[type=text],input[type=url],input[type=password],select{width:100%;min-heig
 <div class="demo" id="demoBadge" hidden>デモモード：データはこの端末だけに保存</div>
 <button class="fab" id="addBtn">＋ 店を登録</button>
 <div class="bar">
+  <button id="evBtn" class="hot">今月の会</button>
   <button id="listBtn">店の一覧</button>
   <button id="memBtn">メンバー</button>
-  <button id="homeBtn">会社に戻る</button>
+  <button id="homeBtn">会社</button>
 </div>
 
 <svg id="cross" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 38 C20 38 6 22 6 14 a14 14 0 0 1 28 0 C34 22 20 38 20 38Z" fill="#e8533f" stroke="#fff" stroke-width="2"/><circle cx="20" cy="14" r="5" fill="#fff"/></svg>
@@ -146,6 +169,7 @@ class LocalStore {
   async init(){
     try { this.d = JSON.parse(localStorage.getItem(this.key)); } catch { this.d = null; }
     if(!this.d) this.d = await demoSeed();
+    for(const t of ['events','event_dates','date_answers']) this.d[t] ||= [];
     this.save(false);
   }
   save(emit=true){ try{ localStorage.setItem(this.key, JSON.stringify(this.d)); }catch{} if(emit) this.subs.forEach(f=>f()); }
@@ -161,6 +185,11 @@ class LocalStore {
   async setWish(r,m,on){ const d=this.d; d.wishes=d.wishes.filter(w=>!(w.r===r&&w.m===m)); if(on) d.wishes.push({r,m}); this.save(); }
   async setVisits(r,ms){ const d=this.d; d.visits=d.visits.filter(v=>v.r!==r); ms.forEach(m=>d.visits.push({r,m})); this.save(); }
   async reset(){ this.d = await demoSeed(); this.save(); }
+  async setSettings(p){ Object.assign(this.d.settings,p); this.save(); }
+  async ins(t,row){ const x={id:uid(),...row}; (this.d[t] ||= []).push(x); this.save(); return x; }
+  async upd(t,id,p){ Object.assign(this.d[t].find(x=>x.id===id),p); this.save(); }
+  async del(t,f){ this.d[t]=(this.d[t]||[]).filter(x=>!Object.entries(f).every(([k,v])=>x[k]===v)); this.save(); }
+  async ups(t,row,keys){ const a=(this.d[t] ||= []); const ex=a.find(x=>keys.every(k=>x[k]===row[k])); if(ex) Object.assign(ex,row); else a.push({...row}); this.save(); }
 }
 
 class SupaStore {
@@ -173,13 +202,15 @@ class SupaStore {
   }
   async reload(emit){
     const q = n => this.sb.from(n).select('*');
-    const [s,m,r,w,v] = await Promise.all([q('settings'),q('members'),q('restaurants'),q('wishes'),q('visits')]);
+    const [s,m,r,w,v,ev,ed,da] = await Promise.all([q('settings'),q('members'),q('restaurants'),q('wishes'),q('visits'),q('events'),q('event_dates'),q('date_answers')]);
     const bad = [s,m,r,w,v].find(x=>x.error); if(bad) throw bad.error;
+    this.missingP2 = [ev,ed,da].some(x=>x.error);
     const st = (s.data||[])[0] || {};
     this.d = {
-      settings:{passHash:st.pass_hash||null, officeLat:st.office_lat??DEFAULT_OFFICE.lat, officeLng:st.office_lng??DEFAULT_OFFICE.lng},
-      members:(m.data||[]).map(x=>({id:x.id,nickname:x.nickname,animal:x.animal})),
-      restaurants:(r.data||[]).map(x=>({id:x.id,name:x.name,url:x.url,genre:x.genre,lat:x.lat,lng:x.lng,status:x.status,createdBy:x.created_by})),
+      settings:{passHash:st.pass_hash||null, officeLat:st.office_lat??DEFAULT_OFFICE.lat, officeLng:st.office_lng??DEFAULT_OFFICE.lng, hpKey:st.hp_key||'', stations:st.stations||[]},
+      members:(m.data||[]).map(x=>({id:x.id,nickname:x.nickname,animal:x.animal,orderNo:x.order_no,dislikes:x.dislikes||''})),
+      restaurants:(r.data||[]).map(x=>({id:x.id,name:x.name,url:x.url,genre:x.genre,lat:x.lat,lng:x.lng,status:x.status,createdBy:x.created_by,budget:x.budget})),
+      events:ev.data||[], event_dates:ed.data||[], date_answers:da.data||[],
       wishes:(w.data||[]).map(x=>({r:x.restaurant_id,m:x.member_id})),
       visits:(v.data||[]).map(x=>({r:x.restaurant_id,m:x.member_id}))};
     if(emit) this.subs.forEach(f=>f());
@@ -190,12 +221,17 @@ class SupaStore {
   setPass(h){ return this.run(this.sb.from('settings').upsert({id:1,pass_hash:h})); }
   setOffice(lat,lng){ return this.run(this.sb.from('settings').upsert({id:1,office_lat:lat,office_lng:lng})); }
   async addMember(m){ const d = await this.run(this.sb.from('members').insert(m).select()); return d[0]; }
-  updateMember(id,p){ return this.run(this.sb.from('members').update(p).eq('id',id)); }
-  async addRestaurant(r){ const d = await this.run(this.sb.from('restaurants').insert({name:r.name,url:r.url,genre:r.genre,lat:r.lat,lng:r.lng,status:'wish',created_by:r.createdBy}).select()); return {...d[0]}; }
+  updateMember(id,p){ const q={}; for(const [k,v] of Object.entries(p)) q[{orderNo:'order_no'}[k]||k]=v; return this.run(this.sb.from('members').update(q).eq('id',id)); }
+  async addRestaurant(r){ const d = await this.run(this.sb.from('restaurants').insert({name:r.name,url:r.url,genre:r.genre,lat:r.lat,lng:r.lng,status:'wish',created_by:r.createdBy,budget:r.budget??null}).select()); return {...d[0]}; }
+  setSettings(p){ const q={id:1}; for(const [k,v] of Object.entries(p)) q[{hpKey:'hp_key'}[k]||k]=v; return this.run(this.sb.from('settings').upsert(q)); }
+  async ins(t,row){ const d = await this.run(this.sb.from(t).insert(row).select()); return d[0]; }
+  upd(t,id,p){ return this.run(this.sb.from(t).update(p).eq('id',id)); }
+  del(t,f){ let q=this.sb.from(t).delete(); for(const [k,v] of Object.entries(f)) q=q.eq(k,v); return this.run(q); }
+  ups(t,row){ return this.run(this.sb.from(t).upsert(row)); }
   updateRestaurant(id,p){ return this.run(this.sb.from('restaurants').update(p).eq('id',id)); }
   deleteRestaurant(id){ return this.run(this.sb.from('restaurants').delete().eq('id',id)); }
   setWish(r,m,on){ const t=this.sb.from('wishes'); return this.run(on ? t.upsert({restaurant_id:r,member_id:m}) : t.delete().eq('restaurant_id',r).eq('member_id',m)); }
-  async setVisits(r,ms){ await this.sb.from('visits').delete().eq('restaurant_id',r); return this.run(this.sb.from('visits').insert(ms.map(m=>({restaurant_id:r,member_id:m})))); }
+  async setVisits(r,ms){ await this.sb.from('visits').delete().eq('restaurant_id',r); if(!ms.length) return this.run(this.sb.from('visits').select('restaurant_id').limit(1)); return this.run(this.sb.from('visits').insert(ms.map(m=>({restaurant_id:r,member_id:m})))); }
 }
 
 async function demoSeed(){
@@ -271,6 +307,11 @@ function makeAnimal(kind){
   return root;
 }
 
+let _qTex=null;
+function qTex(){ if(_qTex) return _qTex; const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
+  x.fillStyle='#fff'; x.beginPath(); x.arc(64,60,54,0,Math.PI*2); x.fill(); x.strokeStyle='#e8533f'; x.lineWidth=8; x.stroke();
+  x.fillStyle='#e8533f'; x.font='bold 80px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('?',64,64);
+  _qTex=new THREE.CanvasTexture(c); _qTex.colorSpace=THREE.SRGBColorSpace; return _qTex; }
 // 選択画面用のサムネイル（同じモデルを小さく描いて画像にする）
 const thumbs = {};
 function buildThumbs(){
@@ -354,6 +395,17 @@ const avatarLayer = {
         const pole = part('cy',0x666666,[0,22,-4],[.8,44,.8]); const flag = part('s',0xe8533f,[7,38,-4],[7,5,.6]); g.add(pole,flag); g.userData.flag=flag; }
       this.scene.add(g); this.groups.set(r.id,g);
     }
+    // 候補日にまだ答えていない人は、会社の前で「？」を出して待つ
+    const una = unanswered(eventOf(monthKey()));
+    if(una.length){
+      const g = new THREE.Group(); g.userData={lat:s.officeLat, mode:'ask'}; const n=una.length, rad=26+n*3;
+      una.forEach((mem,i)=>{ const a=makeAnimal(mem.animal); a.scale.setScalar(30);
+        const ang=Math.PI*.15+(i/Math.max(n-1,1))*Math.PI*.7, ox=Math.cos(ang)*rad, oz=Math.sin(ang)*rad*.4+30;
+        a.position.set(ox,0,oz); a.userData.phase=i*1.1; a.userData.face=0;
+        const q=new THREE.Mesh(new THREE.PlaneGeometry(.7,.7), new THREE.MeshBasicMaterial({map:qTex(), transparent:true, depthTest:false}));
+        q.position.set(0,2.05,0); a.userData.head.parent.add(q); g.add(a); });
+      this.scene.add(g); this.groups.set('__ask',g);
+    }
     m_repaint();
   },
   render(gl, matrix){
@@ -393,6 +445,8 @@ function refresh(){
   drawArea(); drawPins(); avatarLayer.sync();
   if(me){ me = memberOf(me.id) || me; $('#meChip img').src = thumb(me.animal); $('#meChip span').textContent = me.nickname; }
   if(sheetState.kind==='shop' && sheetState.id) openShop(sheetState.id, true);
+  const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('#sheet') && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  if(sheetState.kind==='event' && !typing) eventSheet();
 }
 
 /* ============ シート ============ */
@@ -407,7 +461,7 @@ function openShop(id, keep){
   const wishers = wishersOf(id), visitors = visitorsOf(id), iWish = wishers.some(m=>m.id===me.id);
   const link = /^https?:\/\//.test(r.url||'') ? `<p><a href="${esc(r.url)}" target="_blank" rel="noopener">お店のページを開く</a></p>` : '';
   const html = `<h2>${esc(r.name)}</h2>
-    <div class="row"><span class="tag ${r.status}">${r.status==='visited'?'行った！':'行きたい'}</span><span class="tag">${esc(r.genre||'ジャンル未設定')}</span></div>${link}
+    <div class="row"><span class="tag ${r.status}">${r.status==='visited'?'行った！':'行きたい'}</span><span class="tag">${esc(r.genre||'ジャンル未設定')}</span>${r.budget?`<span class="tag">1人${yen(r.budget)}くらい</span>`:''}</div>${link}
     ${r.status==='visited'
       ? `<h3>行ったメンバー（${visitors.length}人）</h3>${faces(visitors)}
          <div class="row" style="margin-top:14px"><button class="btn ghost" data-a="editVisit">参加者を直す</button><button class="btn ghost" data-a="unvisit">行きたいに戻す</button></div>`
@@ -457,10 +511,11 @@ function addForm(){
     <p class="note" id="fHint">GoogleマップのURLなら、店名と位置を自動で入れます。</p>
     <label class="f" for="fName">店名</label><input type="text" id="fName" value="${esc(draft.name)}" maxlength="60">
     <label class="f" for="fGenre">ジャンル</label><select id="fGenre"><option value="">選んでください</option>${GENRES.map(g=>`<option ${g===draft.genre?'selected':''}>${g}</option>`).join('')}</select>
+    <label class="f" for="fBud">1人あたりの予算の目安（円・任意）</label><input type="text" inputmode="numeric" id="fBud" value="${esc(draft.budget||'')}" placeholder="例 5000">
     <div class="row" style="margin-top:14px"><span class="note" id="fPos" style="flex:1">${pos}</span><button class="btn ghost" id="fPick">地図で位置を決める</button></div>
     <p class="err" id="fErr"></p>
     <div class="row"><button class="btn ghost" id="fCancel">やめる</button><button class="btn pri" id="fOk" style="flex:1">登録する</button></div>`,'add');
-  const sync = ()=>{ draft.url=$('#fUrl').value; draft.name=$('#fName').value; draft.genre=$('#fGenre').value; };
+  const sync = ()=>{ draft.url=$('#fUrl').value; draft.name=$('#fName').value; draft.genre=$('#fGenre').value; draft.budget=$('#fBud').value.replace(/[^\d]/g,''); };
   $('#fUrl').addEventListener('input', ()=>{ sync(); const p=parseShopUrl(draft.url);
     if(p.name && !draft.name){ draft.name=p.name; $('#fName').value=p.name; }
     if(p.lat!=null){ draft.lat=p.lat; draft.lng=p.lng; $('#fPos').textContent='位置：URLから設定しました'; map.easeTo({center:[p.lng,p.lat]}); }
@@ -470,7 +525,7 @@ function addForm(){
   $('#fOk').onclick = async()=>{ sync();
     if(!draft.name.trim()){ $('#fErr').textContent='店名を入れてください'; return; }
     if(draft.lat==null){ $('#fErr').textContent='地図で位置を決めてください'; return; }
-    const r = await store.addRestaurant({name:draft.name.trim(),url:draft.url.trim(),genre:draft.genre,lat:draft.lat,lng:draft.lng,createdBy:me.id});
+    const r = await store.addRestaurant({name:draft.name.trim(),url:draft.url.trim(),genre:draft.genre,lat:draft.lat,lng:draft.lng,budget:draft.budget?+draft.budget:null,createdBy:me.id});
     await store.setWish(r.id,me.id,true); draft=null; toast('登録しました。地図であなたが待っています'); openShop(r.id); };
 }
 
@@ -494,16 +549,32 @@ function listSheet(){
 }
 function memberSheet(){
   const ms = D().members.map(m=>({m, w:D().wishes.filter(x=>x.m===m.id).length, v:D().visits.filter(x=>x.m===m.id).length}));
-  openSheet(`<h2>メンバー（${ms.length}人）</h2><ul class="list">${ms.map(({m,w,v})=>`<li><img src="${thumb(m.animal)}" alt=""><div style="flex:1"><b>${esc(m.nickname)}</b>${m.id===me.id?'（あなた）':''}<br><span class="note">${ANIMAL_NAME[m.animal]||''}　参加 ${v}回・行きたい ${w}店</span></div></li>`).join('')}</ul>`,'members');
+  const rot = rotation(), pos = id => rot.findIndex(x=>x.id===id);
+  ms.sort((a,b)=>pos(a.m.id)-pos(b.m.id));
+  openSheet(`<h2>メンバー（${ms.length}人）</h2><p class="note">上から幹事の順番です。矢印で並べ替えられます。</p><ul class="list">${ms.map(({m,w,v},i)=>`<li><span class="note" style="width:1.6em;text-align:center">${i+1}</span><img src="${thumb(m.animal)}" alt=""><div style="flex:1"><b>${esc(m.nickname)}</b>${m.id===me.id?'（あなた）':''}<br><span class="note">${ANIMAL_NAME[m.animal]||''}　参加 ${v}回・行きたい ${w}店${m.dislikes?'<br>苦手：'+esc(m.dislikes):''}</span></div>
+    <button class="mini" data-up="${i}" aria-label="${esc(m.nickname)}を上へ" ${i?'':'disabled'}>↑</button><button class="mini" data-dn="${i}" aria-label="${esc(m.nickname)}を下へ" ${i<ms.length-1?'':'disabled'}>↓</button></li>`).join('')}</ul>`,'members');
+  const move = async (i,j)=>{ const ids=ms.map(x=>x.m.id); [ids[i],ids[j]]=[ids[j],ids[i]]; for(let n=0;n<ids.length;n++) if(memberOf(ids[n]).orderNo!==n+1) await store.updateMember(ids[n],{orderNo:n+1}); memberSheet(); };
+  document.querySelectorAll('#sheetBody [data-up]').forEach(b=>b.onclick=()=>move(+b.dataset.up,+b.dataset.up-1));
+  document.querySelectorAll('#sheetBody [data-dn]').forEach(b=>b.onclick=()=>move(+b.dataset.dn,+b.dataset.dn+1));
 }
 function settingsSheet(){
   openSheet(`<h2>設定</h2>
     <h3>会社の場所</h3><p class="note">30分圏の目安（点線の円）の中心になります。</p><button class="btn wide" id="sOffice">地図で会社の場所を決める</button>
     <h3>自分のアバター</h3><button class="btn wide" id="sAnimal">動物を変える</button>
+    <h3>苦手な食べ物・アレルギー</h3><p class="note">幹事が店を選ぶときと、店の提案で使います。</p><textarea id="sDis" maxlength="120" placeholder="例 パクチー、えび（アレルギー）">${esc(me.dislikes||'')}</textarea><button class="btn wide" id="sDisOk" style="margin-top:8px">保存する</button>
+    <h3>店の提案</h3><p class="note">ホットペッパーグルメのAPIキー（無料）を入れると、「今月の会」から店を提案できます。</p><input type="text" id="sHp" autocomplete="off" value="${esc(D().settings.hpKey||'')}" placeholder="APIキー"><button class="btn wide" id="sHpOk" style="margin-top:8px">キーを保存</button>
+    <h3>探す駅（電車30分以内）</h3><p class="note">会社の周りに加えて、ここに登録した駅の周りでも店を探します。</p>
+    <ul class="list">${(D().settings.stations||[]).map((st,i)=>`<li><div style="flex:1">${esc(st.name)}</div><button class="mini" data-st="${i}">消す</button></li>`).join('')}</ul>
+    <div class="row" style="margin-top:6px"><input type="text" id="sStName" placeholder="駅名（例 新宿）" style="flex:1"><button class="btn" id="sStAdd">地図で場所を決める</button></div>
     <h3>合言葉</h3><label class="f" for="sPass">新しい合言葉</label><input type="text" id="sPass" autocomplete="off"><button class="btn wide" id="sPassOk" style="margin-top:8px">合言葉を変える</button>
     <h3>この端末</h3><div class="row"><button class="btn ghost" id="sOut">ログアウト</button>${store instanceof LocalStore?'<button class="btn ghost" id="sReset">デモデータを最初に戻す</button>':''}</div>
     <p class="note" style="margin-top:14px">${store instanceof LocalStore?'デモモード：データはこの端末のブラウザだけに保存されます。':'共有モード：データはメンバー全員で共有されます。'}</p>`,'settings');
   $('#sOffice').onclick = ()=>startPick('会社の場所に合わせてください', [D().settings.officeLng,D().settings.officeLat], async c=>{ await store.setOffice(c.lat,c.lng); toast('会社の場所を保存しました'); });
+  $('#sDisOk').onclick = async()=>{ await store.updateMember(me.id,{dislikes:$('#sDis').value.trim()}); toast('保存しました'); };
+  $('#sHpOk').onclick = async()=>{ await store.setSettings({hpKey:$('#sHp').value.trim()}); toast('保存しました'); };
+  document.querySelectorAll('#sheetBody [data-st]').forEach(b=>b.onclick=async()=>{ const a=[...(D().settings.stations||[])]; a.splice(+b.dataset.st,1); await store.setSettings({stations:a}); settingsSheet(); });
+  $('#sStAdd').onclick = ()=>{ const name=$('#sStName').value.trim(); if(!name){ toast('駅名を入れてください'); return; }
+    startPick(name+'駅に合わせてください', null, async c=>{ await store.setSettings({stations:[...(D().settings.stations||[]), {name, lat:c.lat, lng:c.lng}]}); settingsSheet(); }, settingsSheet); };
   $('#sAnimal').onclick = ()=>animalPicker(me.animal, async k=>{ await store.updateMember(me.id,{animal:k}); closeSheet(); }, true);
   $('#sPassOk').onclick = async()=>{ const v=$('#sPass').value; if(v.trim().length<4){ toast('4文字以上にしてください'); return; } await store.setPass(await sha(v)); toast('合言葉を変えました。メンバーに伝えてください'); };
   $('#sOut').onclick = ()=>{ try{localStorage.removeItem(ME_KEY);}catch{} location.reload(); };
@@ -518,6 +589,179 @@ function animalPicker(cur, done, inSheet){
   const host = inSheet ? (openSheet(html,'animal'), $('#sheetBody')) : ($('#gateBody').innerHTML = html, $('#gateBody'));
   host.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{ sel=b.dataset.k; host.querySelectorAll('.pick').forEach(x=>x.setAttribute('aria-pressed',x===b)); host.querySelector('#apOk').disabled=false; });
   host.querySelector('#apOk').onclick = ()=>sel && done(sel);
+}
+
+/* ============ P2：今月の会（幹事・候補日・当日・割り勘・提案） ============ */
+const monthKey = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+const monthLabel = k => { const [y,m]=k.split('-'); return `${y}年${+m}月`; };
+const addMonth = (k,n) => { const [y,m]=k.split('-').map(Number); return monthKey(new Date(y, m-1+n, 1)); };
+const WD = ['日','月','火','水','木','金','土'];
+const dayLabel = iso => { const d=new Date(iso+'T00:00:00'); return `${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`; };
+const yen = n => (Math.round(n)||0).toLocaleString('ja-JP') + '円';
+const rotation = () => [...D().members].sort((a,b)=>(a.orderNo??999)-(b.orderNo??999) || a.nickname.localeCompare(b.nickname,'ja'));
+const T = t => D()[t] || [];
+let viewMonth = monthKey();
+
+function eventOf(k){ return T('events').find(e=>e.month===k); }
+// 幹事：その月の会に決まっていればその人。なければ、直前の会の幹事の次の人（順番表どおり）
+function organizerFor(k){
+  const ev = eventOf(k); if(ev && ev.organizer_id && memberOf(ev.organizer_id)) return memberOf(ev.organizer_id);
+  const rot = rotation(); if(!rot.length) return null;
+  const prev = T('events').filter(e=>e.month<k && e.organizer_id).sort((a,b)=>a.month<b.month?1:-1)[0];
+  if(!prev) return rot[0];
+  const gap = (()=>{ let n=0, x=prev.month; while(x<k && n<24){ x=addMonth(x,1); n++; } return n; })();
+  const i = rot.findIndex(m=>m.id===prev.organizer_id);
+  return rot[((i<0?-1:i) + gap) % rot.length];
+}
+async function ensureEvent(k){
+  return eventOf(k) || await store.ins('events', {month:k, organizer_id:organizerFor(k)?.id||null, status:'planning'});
+}
+const datesOf = ev => ev ? T('event_dates').filter(d=>d.event_id===ev.id).sort((a,b)=>a.day<b.day?-1:1) : [];
+const answersOf = dateId => T('date_answers').filter(a=>a.date_id===dateId);
+const ansOf = (dateId,mid) => answersOf(dateId).find(a=>a.member_id===mid)?.ans;
+// 候補日のどれにも答えていない人
+function unanswered(ev){ const ds=datesOf(ev); if(!ds.length || ev.final_date_id || ev.status==='done') return []; return D().members.filter(m=>ds.some(d=>!ansOf(d.id,m.id))); }
+function attendees(ev){ if(!ev?.final_date_id) return []; return answersOf(ev.final_date_id).filter(a=>a.ans!=='x').map(a=>memberOf(a.member_id)).filter(Boolean); }
+
+function lineShare(text){ return 'https://line.me/R/share?text=' + encodeURIComponent(text); }
+const appUrl = () => location.href.split('#')[0];
+
+function eventSheet(){
+  if(store.missingP2){ openSheet('<h2>今月の会</h2><p>この機能を使うには、Supabaseに追加の設定（SQLの実行）が必要です。管理者に連絡してください。</p>','event-missing'); return; }
+  const k = viewMonth, ev = eventOf(k), org = organizerFor(k), next = organizerFor(addMonth(k,1));
+  const isOrg = org && me && org.id===me.id;
+  const ds = datesOf(ev), fin = ev?.final_date_id ? ds.find(d=>d.id===ev.final_date_id) : null;
+  const shop = ev?.restaurant_id ? D().restaurants.find(r=>r.id===ev.restaurant_id) : null;
+  const una = unanswered(ev), att = attendees(ev);
+  const chk = [['日程を決める',!!fin],['店を決める',!!shop],['予約する',!!ev?.reserved],['LINEで知らせる',!!ev?.notified],['会計する',!!ev?.paid]];
+  const mark = {o:'○',t:'△',x:'×'};
+  const dateRows = ds.map(d=>{ const a=answersOf(d.id), c=x=>a.filter(y=>y.ans===x).length, mine=ansOf(d.id,me.id);
+    return `<li class="drow${fin&&fin.id===d.id?' fin':''}"><div style="flex:1"><b>${dayLabel(d.day)}</b>${fin&&fin.id===d.id?' <span class="tag visited">決定</span>':''}<br><span class="note">○${c('o')} △${c('t')} ×${c('x')}</span></div>
+      <div class="seg" role="group" aria-label="${dayLabel(d.day)}の回答">${['o','t','x'].map(x=>`<button data-ans="${x}" data-d="${esc(d.id)}" aria-pressed="${mine===x}">${mark[x]}</button>`).join('')}</div>
+      ${isOrg?`<button class="mini" data-fix="${esc(d.id)}">${fin&&fin.id===d.id?'取消':'決定'}</button><button class="mini" data-rm="${esc(d.id)}" aria-label="候補日を消す">消す</button>`:''}</li>`; }).join('');
+  const dislikes = (att.length?att:D().members).filter(m=>m.dislikes).map(m=>`${esc(m.nickname)}：${esc(m.dislikes)}`);
+  const total = ev?.total||'', head = ev?.headcount || att.length || '';
+  const unit = ev?.round_unit || 100;
+  const per = total && head ? Math.ceil(total/head/unit)*unit : 0;
+  const guide = fin && shop ? `${monthLabel(k)}のワンチーム\n日時：${dayLabel(fin.day)} ${ev.meet_time||''}\n店：${shop.name}\n${ev.meet_place?'集合：'+ev.meet_place+'\n':''}地図：https://www.google.com/maps/search/?api=1&query=${shop.lat},${shop.lng}\n${shop.url?'お店：'+shop.url+'\n':''}参加：${att.map(m=>m.nickname).join('、')}` : '';
+  const ask = `${monthLabel(k)}のワンチームの候補日を出しました。○△×で答えてください！\n${appUrl()}`;
+  openSheet(`<div class="row evnav"><button class="mini" id="evPrev" aria-label="前の月">‹ 前の月</button><b>${monthLabel(k)}の会</b><button class="mini" id="evNext" aria-label="次の月">次の月 ›</button></div>
+    <div class="orgrow">${org?`<img src="${thumb(org.animal)}" alt=""><div style="flex:1"><span class="note">今月の幹事</span><br><b>${esc(org.nickname)}</b>${isOrg?'（あなた）':''}</div>`:'<div class="note" style="flex:1">メンバーがいません</div>'}
+      ${next?`<div style="text-align:end"><span class="note">次の幹事</span><br><b>${esc(next.nickname)}</b></div>`:''}</div>
+    ${isOrg?`<h3>幹事のチェックリスト</h3><ul class="checks">${chk.map(([t,on],i)=>`<li><label><input type="checkbox" data-ck="${i}" ${on?'checked':''} ${i<2?'disabled':''}> ${t}</label></li>`).join('')}</ul>`:''}
+    <h3>候補日</h3>${ds.length?`<ul class="list">${dateRows}</ul>`:'<p class="note">まだ候補日がありません。</p>'}
+    ${una.length?`<p class="note">まだ答えていない人：${una.map(m=>esc(m.nickname)).join('、')}</p>`:''}
+    ${isOrg?`<div class="row" style="margin-top:8px"><input type="date" id="evDay" style="flex:1"><button class="btn" id="evAdd">候補日を追加</button></div>
+      ${ds.length?`<a class="btn ghost wide lnk" href="${lineShare(ask)}" target="_blank" rel="noopener">LINEで回答をお願いする</a>`:''}`:''}
+    <h3>お店</h3>${shop?`<p><b>${esc(shop.name)}</b> <span class="note">${esc(shop.genre||'')}${shop.budget?'　1人'+yen(shop.budget)+'くらい':''}</span></p>`:'<p class="note">まだ決まっていません。</p>'}
+    ${isOrg?`<div class="row"><button class="btn" id="evPick">店を選ぶ</button><button class="btn" id="evSuggest">店を提案してもらう</button><button class="btn ghost" id="evRoulette">迷ったらルーレット</button></div>`:''}
+    ${dislikes.length?`<h3>苦手な食べ物・アレルギー${att.length?'（参加者）':''}</h3><ul class="note" style="margin:0;padding-left:1.2em">${dislikes.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}
+    ${fin&&shop?`<h3>当日の案内</h3><div class="card">
+      <p style="margin:0"><b>${dayLabel(fin.day)} ${esc(ev.meet_time||'')}</b><br>${esc(shop.name)}${ev.meet_place?'<br>集合：'+esc(ev.meet_place):''}</p>
+      <p style="margin:6px 0"><a href="https://www.google.com/maps/search/?api=1&query=${shop.lat},${shop.lng}" target="_blank" rel="noopener">Googleマップで開く</a>${shop.url?`　<a href="${esc(shop.url)}" target="_blank" rel="noopener">お店のページ</a>`:''}</p>
+      <div class="faces">${att.map(m=>`<div class="face"><img src="${thumb(m.animal)}" alt=""><span>${esc(m.nickname)}</span></div>`).join('')}</div>
+      ${isOrg?`<div class="row"><input type="text" id="evTime" placeholder="集合時間（例 19:00）" value="${esc(ev.meet_time||'')}" style="flex:1"><input type="text" id="evPlace" placeholder="集合場所（任意）" value="${esc(ev.meet_place||'')}" style="flex:1"></div><button class="btn wide" id="evSave" style="margin-top:6px">時間と集合場所を保存</button>`:''}
+      <a class="btn pri wide lnk" style="margin-top:8px" href="${lineShare(guide)}" target="_blank" rel="noopener" id="evShare">LINEで案内を送る</a></div>`:''}
+    ${fin?`<h3>割り勘</h3><div class="row"><input type="text" inputmode="numeric" id="evTotal" placeholder="合計金額" value="${esc(total)}" style="flex:2"><input type="text" inputmode="numeric" id="evHead" placeholder="人数" value="${esc(head)}" style="flex:1"><select id="evUnit" style="flex:1">${[1,10,100,500].map(u=>`<option value="${u}" ${u==unit?'selected':''}>${u}円単位</option>`).join('')}</select></div>
+      <p class="big" id="evPer">${per?`1人 ${yen(per)}`:'合計と人数を入れてください'}</p><p class="note" id="evRest">${per?`集める合計 ${yen(per*head)}（差額 ${yen(per*head-total)}）`:''}</p>
+      <button class="btn wide" id="evCalc">保存する</button>`:''}
+    ${fin&&shop&&ev.status!=='done'&&isOrg?`<button class="btn done wide" id="evDone" style="margin-top:14px">会を終える（みんなでお祝い）</button>`:''}
+    ${ev?.status==='done'?'<p class="note" style="margin-top:12px">この会は終わりました。おつかれさまでした！</p>':''}`,'event');
+  const b = id => $('#'+id);
+  b('evPrev').onclick=()=>{ viewMonth=addMonth(viewMonth,-1); eventSheet(); };
+  b('evNext').onclick=()=>{ viewMonth=addMonth(viewMonth,1); eventSheet(); };
+  document.querySelectorAll('#sheetBody [data-ans]').forEach(x=>x.onclick=()=>store.ups('date_answers',{date_id:x.dataset.d, member_id:me.id, ans:x.dataset.ans},['date_id','member_id']));
+  document.querySelectorAll('#sheetBody [data-rm]').forEach(x=>x.onclick=async()=>{ if(ev.final_date_id===x.dataset.rm) await store.upd('events',ev.id,{final_date_id:null}); await store.del('date_answers',{date_id:x.dataset.rm}); await store.del('event_dates',{id:x.dataset.rm}); });
+  document.querySelectorAll('#sheetBody [data-fix]').forEach(x=>x.onclick=()=>store.upd('events',ev.id,{final_date_id: ev.final_date_id===x.dataset.fix?null:x.dataset.fix}));
+  document.querySelectorAll('#sheetBody [data-ck]').forEach(x=>x.onchange=async()=>{ const key=['','','reserved','notified','paid'][x.dataset.ck]; if(key) await store.upd('events',(await ensureEvent(k)).id,{[key]:x.checked}); });
+  const add=b('evAdd'); if(add) add.onclick=async()=>{ const v=b('evDay').value; if(!v){ toast('日付を選んでください'); return; } const e=await ensureEvent(k); if(datesOf(e).some(d=>d.day===v)){ toast('その日はもうあります'); return; } await store.ins('event_dates',{event_id:e.id, day:v}); };
+  const sh=b('evShare'); if(sh) sh.addEventListener('click',()=>{ if(isOrg) store.upd('events',ev.id,{notified:true}); });
+  const sv=b('evSave'); if(sv) sv.onclick=()=>store.upd('events',ev.id,{meet_time:b('evTime').value.trim(), meet_place:b('evPlace').value.trim()});
+  const calc=()=>{ const t=+b('evTotal').value.replace(/[^\d]/g,''), h=+b('evHead').value.replace(/[^\d]/g,''), u=+b('evUnit').value; const p=t&&h?Math.ceil(t/h/u)*u:0;
+    b('evPer').textContent = p?`1人 ${yen(p)}`:'合計と人数を入れてください'; b('evRest').textContent = p?`集める合計 ${yen(p*h)}（差額 ${yen(p*h-t)}）`:''; return {t,h,u}; };
+  if(b('evTotal')){ ['evTotal','evHead','evUnit'].forEach(i=>b(i).addEventListener('input',calc)); b('evCalc').onclick=()=>{ const {t,h,u}=calc(); store.upd('events',ev.id,{total:t||null, headcount:h||null, round_unit:u, paid: t>0}); toast('保存しました'); }; }
+  if(b('evPick')) b('evPick').onclick=()=>pickShopSheet(k);
+  if(b('evSuggest')) b('evSuggest').onclick=()=>suggestSheet(k);
+  if(b('evRoulette')) b('evRoulette').onclick=()=>rouletteSheet(k);
+  if(b('evDone')) b('evDone').onclick=async()=>{ const ids=att.map(m=>m.id); if(!ids.length){ toast('参加者がいません'); return; }
+    await store.setVisits(shop.id,ids); await store.updateRestaurant(shop.id,{status:'visited'}); await store.upd('events',ev.id,{status:'done'}); toast('おつかれさまでした！'); closeSheet(); map.easeTo({center:[shop.lng,shop.lat]}); };
+}
+
+async function decideShop(k, rid){ const e=await ensureEvent(k); await store.upd('events',e.id,{restaurant_id:rid}); toast('お店を決めました'); viewMonth=k; eventSheet(); }
+
+function pickShopSheet(k){
+  const rs = D().restaurants.filter(r=>r.status==='wish').sort((a,b)=>wishersOf(b.id).length-wishersOf(a.id).length);
+  openSheet(`<h2>店を選ぶ</h2><p class="note">「行きたい」に登録されている店から選べます。</p>
+    ${rs.length?`<ul class="list">${rs.map(r=>`<li><button data-id="${esc(r.id)}"><b>${esc(r.name)}</b><br><span class="note">${esc(r.genre||'')}${r.budget?'　1人'+yen(r.budget):''}　行きたい ${wishersOf(r.id).length}人</span></button></li>`).join('')}</ul>`:'<p class="note">行きたい店がまだありません。</p>'}
+    <button class="btn ghost wide" id="psBack" style="margin-top:10px">戻る</button>`,'pick');
+  document.querySelectorAll('#sheetBody [data-id]').forEach(x=>x.onclick=()=>decideShop(k,x.dataset.id));
+  $('#psBack').onclick=eventSheet;
+}
+
+/* ---- ルーレット：結果は幹事にだけ見せ、「この店に決める」で確定 ---- */
+function rouletteSheet(k){
+  const rs = D().restaurants.filter(r=>r.status==='wish').sort((a,b)=>wishersOf(b.id).length-wishersOf(a.id).length);
+  if(rs.length<2){ toast('行きたい店が2つ以上必要です'); return; }
+  openSheet(`<h2>迷ったらルーレット</h2><p class="note">候補にする店を選んでください。結果はあなたにだけ表示されます。</p>
+    ${rs.map((r,i)=>`<label class="chk"><input type="checkbox" value="${esc(r.id)}" ${i<5?'checked':''}>${esc(r.name)}</label>`).join('')}
+    <div class="wheel" id="rlBox">？</div>
+    <div class="row"><button class="btn ghost" id="rlBack">戻る</button><button class="btn pri" id="rlGo" style="flex:1">回す</button></div><div id="rlRes"></div>`,'roulette');
+  $('#rlBack').onclick=eventSheet;
+  $('#rlGo').onclick=()=>{ const ids=[...document.querySelectorAll('#sheetBody input:checked')].map(i=>i.value); if(ids.length<2){ toast('2つ以上選んでください'); return; }
+    const names=ids.map(id=>D().restaurants.find(r=>r.id===id)); const win=names[Math.floor(Math.random()*names.length)];
+    const box=$('#rlBox'); $('#rlGo').disabled=true; let n=0; const steps=18+Math.floor(Math.random()*6);
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const tick=()=>{ n++; const cur = n>=steps ? win : names[n%names.length]; box.textContent=cur.name; box.classList.toggle('hit', n>=steps);
+      if(n<steps && !reduce) setTimeout(tick, 40 + n*n*0.9); else { $('#rlGo').disabled=false; $('#rlRes').innerHTML=`<button class="btn done wide" id="rlOk" style="margin-top:8px">この店に決める</button>`; $('#rlOk').onclick=()=>decideShop(k,win.id); } };
+    reduce ? (n=steps-1, tick()) : tick(); };
+}
+
+/* ---- 店の自動提案（ホットペッパーグルメ グルメサーチAPI、JSONP） ---- */
+function hpFetch(params){
+  return new Promise((ok,ng)=>{ const cb='hp'+Math.random().toString(36).slice(2); const sc=document.createElement('script');
+    const q=new URLSearchParams({key:D().settings.hpKey, format:'jsonp', callback:cb, count:'50', ...params});
+    const to=setTimeout(()=>{ cleanup(); ng(new Error('timeout')); },10000);
+    const cleanup=()=>{ clearTimeout(to); delete window[cb]; sc.remove(); };
+    window[cb]=d=>{ cleanup(); d?.results?.error ? ng(new Error(d.results.error[0]?.message||'error')) : ok(d?.results?.shop||[]); };
+    sc.onerror=()=>{ cleanup(); ng(new Error('network')); };
+    sc.src='https://webservice.recruit.co.jp/hotpepper/gourmet/v1/?'+q; document.head.appendChild(sc); });
+}
+const budgetRange = s => { const n=String(s||'').replace(/,/g,'').match(/\d+/g)?.map(Number)||[]; return n.length?{lo:n[0], hi:n[n.length-1]}:null; };
+function distKm(a,b,c,d){ const R=6371, x=(c-a)*Math.PI/180, y=(d-b)*Math.PI/180; const h=Math.sin(x/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(y/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+let lastSuggest = [];
+function suggestSheet(k){
+  const s=D().settings, ev=eventOf(k), att=attendees(ev);
+  if(!s.hpKey){ openSheet(`<h2>店を提案してもらう</h2><p>この機能には、ホットペッパーグルメのAPIキー（無料）が必要です。設定画面の「店の提案」にキーを入れてください。</p><button class="btn wide" id="sgSet">設定を開く</button><button class="btn ghost wide" id="sgBack" style="margin-top:8px">戻る</button>`,'suggest');
+    $('#sgSet').onclick=settingsSheet; $('#sgBack').onclick=eventSheet; return; }
+  openSheet(`<h2>店を提案してもらう</h2><p class="note">会社と、設定に登録した駅の周り（徒歩圏）から探します。</p>
+    <div class="row"><label class="f" style="flex:1">1人の予算（円）<input type="text" inputmode="numeric" id="sgBud" value="5000"></label><label class="f" style="flex:1">人数<input type="text" inputmode="numeric" id="sgNum" value="${att.length||D().members.length}"></label></div>
+    <button class="btn pri wide" id="sgGo" style="margin-top:8px">探す</button><div id="sgOut"></div><button class="btn ghost wide" id="sgBack" style="margin-top:10px">戻る</button>`,'suggest');
+  $('#sgBack').onclick=eventSheet;
+  $('#sgGo').onclick=async()=>{ const bud=+$('#sgBud').value.replace(/[^\d]/g,'')||0, num=+$('#sgNum').value.replace(/[^\d]/g,'')||1; const out=$('#sgOut'); out.innerHTML='<p class="note">探しています…</p>';
+    const spots=[{lat:s.officeLat,lng:s.officeLng}, ...(s.stations||[])];
+    let shops=[]; try{ const rs=await Promise.all(spots.map(p=>hpFetch({lat:p.lat,lng:p.lng,range:'3',party_capacity:String(num)}))); shops=rs.flat(); }
+    catch(e){ out.innerHTML=`<p class="err">お店を取得できませんでした（${esc(e.message)}）。APIキーを確かめてください。</p>`; return; }
+    const seen=new Set(); shops=shops.filter(x=>!seen.has(x.id)&&seen.add(x.id));
+    const vis=D().restaurants.filter(r=>r.status==='visited'), wish=D().restaurants.filter(r=>r.status==='wish');
+    const people=(att.length?att:D().members); const ng=people.flatMap(m=>(m.dislikes||'').split(/[、,，\s・\/]+/)).map(x=>x.trim()).filter(x=>x.length>=2);
+    const recentG=new Set(T('events').filter(e=>e.restaurant_id).sort((a,b)=>a.month<b.month?1:-1).slice(0,3).map(e=>D().restaurants.find(r=>r.id===e.restaurant_id)?.genre).filter(Boolean));
+    const scored=shops.map(x=>{ const br=budgetRange(x.budget?.name||x.budget?.average); const lat=+x.lat, lng=+x.lng; const g=x.genre?.name||'';
+      if(bud && br && br.lo>bud) return null;                                   // 予算オーバー
+      if(vis.some(v=>v.name===x.name || distKm(v.lat,v.lng,lat,lng)<0.03)) return null; // 行ったことがある
+      const text=g+' '+(x.genre?.catch||'')+' '+(x.catch||''); if(ng.some(w=>text.includes(w))) return null; // 苦手に当たる
+      let sc=0; const w=wish.find(v=>v.name===x.name || distKm(v.lat,v.lng,lat,lng)<0.03); if(w) sc+=100+wishersOf(w.id).length*10;
+      if(![...recentG].some(rg=>g.includes(rg)||rg.includes(g))) sc+=20;      // 最近行っていないジャンル
+      const near=vis.length?Math.min(...vis.map(v=>distKm(v.lat,v.lng,lat,lng))):9; sc+=Math.min(near,2)*10; // まだ行っていないエリア
+      return {x,sc,br,lat,lng,g}; }).filter(Boolean).sort((a,b)=>b.sc-a.sc).slice(0,5);
+    lastSuggest=scored;
+    out.innerHTML = scored.length ? `<ul class="list">${scored.map((o,i)=>`<li style="align-items:flex-start">${o.x.photo?.mobile?.s?`<img src="${esc(o.x.photo.mobile.s)}" alt="" style="border-radius:10px">`:''}<div style="flex:1"><b>${esc(o.x.name)}</b><br><span class="note">${esc(o.g)}　${esc(o.x.budget?.name||'')}<br>${esc(o.x.station_name?o.x.station_name+'駅':'')} ${esc(o.x.mobile_access||'')}</span>
+      <div class="row" style="margin-top:6px"><a class="mini" href="${esc(o.x.urls?.pc||'#')}" target="_blank" rel="noopener">お店のページ</a><button class="mini" data-w="${i}">行きたいに登録</button><button class="mini" data-k="${i}">この店に決める</button></div></div></li>`).join('')}</ul><p class="note">Powered by <a href="http://webservice.recruit.co.jp/" target="_blank" rel="noopener">ホットペッパーグルメ Webサービス</a></p>`
+      : '<p class="note">条件に合うお店が見つかりませんでした。予算か人数を変えてみてください。</p>';
+    const toShop=async i=>{ const o=lastSuggest[i]; const ex=D().restaurants.find(r=>r.name===o.x.name); if(ex) return ex;
+      const br=o.br; const r=await store.addRestaurant({name:o.x.name,url:o.x.urls?.pc||'',genre:o.g,lat:o.lat,lng:o.lng,budget:br?Math.round((br.lo+br.hi)/2):null,createdBy:me.id}); await store.setWish(r.id,me.id,true); return r; };
+    out.querySelectorAll('[data-w]').forEach(b=>b.onclick=async()=>{ await toShop(+b.dataset.w); toast('行きたいに登録しました'); b.disabled=true; });
+    out.querySelectorAll('[data-k]').forEach(b=>b.onclick=async()=>{ const r=await toShop(+b.dataset.k); decideShop(k,r.id); });
+  };
 }
 
 /* ============ 入口：合言葉 → 自分を選ぶ ============ */
@@ -555,6 +799,7 @@ function enter(m){
 /* ============ 起動 ============ */
 $('#addBtn').onclick = ()=>addForm();
 $('#sheetX').onclick = ()=>{ if(sheetState.kind==='add') draft=null; closeSheet(); };
+$('#evBtn').onclick = ()=>{ viewMonth=monthKey(); eventSheet(); };
 $('#listBtn').onclick = listSheet; $('#memBtn').onclick = memberSheet; $('#setBtn').onclick = settingsSheet; $('#meChip').onclick = memberSheet;
 $('#homeBtn').onclick = ()=>{ const s=D().settings; map.flyTo({center:[s.officeLng,s.officeLat], zoom:13.6, pitch:50}); };
 
