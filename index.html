@@ -780,10 +780,12 @@ const midBudget = t => { const b=budgetRange(String(t||'').replace(/[０-９]/g,
 async function hpDetails(name, lat, lng){
   if(!D().settings.hpKey || !name) return {};
   const key = n => String(n).replace(/[\s　・'’\-－]/g,'').toLowerCase();
-  try{ const list = await hpFetch({keyword:name.split(/[\s　]/)[0], lat, lng, range:'2'});
-    const hit = list.find(x=>key(x.name).includes(key(name)) || key(name).includes(key(x.name))) || (list.length===1?list[0]:null);
-    if(!hit || distKm(lat,lng,+hit.lat,+hit.lng) > .3) return {};
-    return {genre: toGenre((hit.genre?.name||'')+' '+(hit.genre?.catch||'')+' '+hit.name), budget: midBudget(hit.budget?.average||hit.budget?.name), source:'hp'}; }
+  const words = [...new Set([name.trim(), name.trim().split(/[\s　]/)[0]])];
+  try{ for(const w of words){ const list = await hpFetch({keyword:w, lat, lng, range:'2'});
+      const hit = list.find(x=>key(x.name).includes(key(name)) || key(name).includes(key(x.name))) || (list.length===1?list[0]:null);
+      if(!hit || distKm(lat,lng,+hit.lat,+hit.lng) > .3) continue;
+      return {genre: toGenre((hit.genre?.name||'')+' '+(hit.genre?.catch||'')+' '+hit.name), budget: midBudget(hit.budget?.average||hit.budget?.name), source:'hp'}; }
+    return {}; }
   catch{ return {}; }
 }
 // URLのページを読んで、店名と位置を探す（食べログ・ホットペッパー・Googleマップの短いリンク）
@@ -858,7 +860,7 @@ function addForm(){
     if(draft?.url!==u || !$('#fUrl')) return; sync(); const got=['店名','位置'];
     if(info.genre && !draft.genre){ draft.genre=info.genre; $('#fGenre').value=info.genre; got.push('ジャンル'); }
     if(info.budget && !draft.budget){ draft.budget=String(info.budget); $('#fBud').value=draft.budget; got.push('予算'); }
-    $('#fHint').textContent = draft.name ? `${got.join('・')}を自動で入れました。違っていたら直してください。` : '位置を読み取りました。店名を入れてください。'; };
+    $('#fHint').textContent = draft.name ? `${got.join('・')}を自動で入れました。${got.length<4 && !(draft.genre&&draft.budget) ? 'ジャンルと予算は、お店のページやホットペッパーで見つからなかったので手で入れてください。' : '違っていたら直してください。'}` : '位置を読み取りました。店名を入れてください。'; };
   $('#fName').addEventListener('input', ()=>{ sync(); if(draftPin) draftPin.getElement().querySelector('b').textContent=draft.name.trim(); });
   $('#fUrl').addEventListener('input', ()=>{ sync(); const p=parseShopUrl(draft.url);
     if(p.name && !draft.name){ draft.name=p.name; $('#fName').value=p.name; }
