@@ -789,8 +789,9 @@ async function hpDetails(name, lat, lng){
 // URLのページを読んで、店名と位置を探す（食べログ・ホットペッパー・Googleマップの短いリンク）
 async function lookupUrl(u){
   if(!store.rpc) return {};
-  const d = await store.rpc('shop_page',{u:parseShopUrl(u).url||u}); if(!d || d.error) return {};
+  const d = await store.rpc('shop_page',{u:parseShopUrl(u).url||u}); if(!d || d.error) return {why:d?.error==='host'?'対応していないサイトです':'ページを読めませんでした'};
   const out = parseShopUrl(d.url||u), b = d.body||'';
+  if(d.status && d.status!==200) out.why = `お店のページを読めませんでした（${d.status}）`;
   const pick = (...res)=>{ for(const re of res){ const m=b.match(re); if(m) return m; } return null; };
   // 食べログなどは、店の情報をまとめた部分（JSON-LD）を持っている
   for(const m of b.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)){
@@ -867,7 +868,7 @@ function addForm(){
       if(q.name && !draft.name){ draft.name=q.name; $('#fName').value=q.name; }
       if(q.lat==null && p.lat!=null){ q.lat=p.lat; q.lng=p.lng; }
       if(q.lat!=null){ $('#fHint').textContent = draft.name ? 'お店のページから店名と位置を読み取りました。' : '位置を読み取りました。店名は入れてください。'; showFound(q); }
-      else $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }).catch(()=>{ if(draft?.url!==u || !$('#fUrl')) return; if(p.lat!=null){ showFound(p); return; } $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }); } });
+      else $('#fHint').textContent=`${q.why?q.why+'。':''}このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。`; }).catch(()=>{ if(draft?.url!==u || !$('#fUrl')) return; if(p.lat!=null){ showFound(p); return; } $('#fHint').textContent='このURLからは位置が分かりませんでした。「店名で探す」か「地図で決める」を使ってください。'; }); } });
   $('#fFind').onclick = async()=>{ sync(); if(!draft.name.trim()){ $('#fErr').textContent='先に店名を入れてください'; return; } $('#fFind').disabled=true;
     const q = await findByName(draft.name.trim()); $('#fFind').disabled=false;
     if(!q){ $('#fErr').textContent='見つかりませんでした。「地図で決める」で位置を合わせてください'; return; }
