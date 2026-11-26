@@ -766,12 +766,42 @@ function parseShopUrl(u){
   }catch{}
   return out;
 }
+// お店の説明の言葉から、アプリのジャンルに当てはめる
+function toGenre(t){
+  t = String(t||''); if(!t.trim()) return '';
+  const rules = [['寿司',/寿司|鮨|すし/],['焼肉',/焼肉|ホルモン|焼き肉/],['ラーメン',/ラーメン|つけ麺|拉麺/],['カレー',/カレー/],['中華',/中華|餃子|四川|広東|点心|飲茶|小籠包/],
+    ['イタリアン',/イタリア|パスタ|ピザ|ピッツァ|トラットリア|リストランテ/],['フレンチ',/フレンチ|フランス|ビストロ/],['エスニック',/タイ料理|ベトナム|インド|韓国|アジア|エスニック|ネパール|メキシコ|スペイン/],
+    ['居酒屋',/居酒屋|焼鳥|焼き鳥|やきとり|串|ダイニングバー|バル|ビアホール|立ち飲み/],['和食',/和食|日本料理|割烹|懐石|会席|そば|蕎麦|うどん|天ぷら|とんかつ|うなぎ|しゃぶ|すき焼|鍋|おでん|海鮮|魚介|料亭|小料理/]];
+  for(const [g,re] of rules) if(re.test(t)) return g;
+  return 'その他';
+}
+const midBudget = t => { const b=budgetRange(String(t||'').replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248))); return b ? Math.round((b.lo+b.hi)/2/500)*500 || b.hi : null; };
+// 店名と位置が分かったら、ホットペッパーで同じ店を探してジャンルと予算をもらう
+async function hpDetails(name, lat, lng){
+  if(!D().settings.hpKey || !name) return {};
+  const key = n => String(n).replace(/[\s　・'’\-－]/g,'').toLowerCase();
+  try{ const list = await hpFetch({keyword:name.split(/[\s　]/)[0], lat, lng, range:'2'});
+    const hit = list.find(x=>key(x.name).includes(key(name)) || key(name).includes(key(x.name))) || (list.length===1?list[0]:null);
+    if(!hit || distKm(lat,lng,+hit.lat,+hit.lng) > .3) return {};
+    return {genre: toGenre((hit.genre?.name||'')+' '+(hit.genre?.catch||'')+' '+hit.name), budget: midBudget(hit.budget?.average||hit.budget?.name), source:'hp'}; }
+  catch{ return {}; }
+}
 // URLのページを読んで、店名と位置を探す（食べログ・ホットペッパー・Googleマップの短いリンク）
 async function lookupUrl(u){
   if(!store.rpc) return {};
   const d = await store.rpc('shop_page',{u:parseShopUrl(u).url||u}); if(!d || d.error) return {};
   const out = parseShopUrl(d.url||u), b = d.body||'';
   const pick = (...res)=>{ for(const re of res){ const m=b.match(re); if(m) return m; } return null; };
+  // 食べログなどは、店の情報をまとめた部分（JSON-LD）を持っている
+  for(const m of b.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)){
+    let j; try{ j = JSON.parse(m[1]); }catch{ continue; }
+    for(const o of [].concat(j, j['@graph']||[])){ if(!o || typeof o!=='object') continue;
+      if(!(o.servesCuisine || o.priceRange || /Restaurant|FoodEstablishment|LocalBusiness/.test(String(o['@type'])))) continue;
+      if(o.name && !out.name && !BADNAME.test(o.name)) out.name = String(o.name).trim();
+      if(o.servesCuisine) out.genre = toGenre([].concat(o.servesCuisine).join(' ')+' '+(o.name||''));
+      if(o.priceRange) out.budget = midBudget(o.priceRange);
+      if(o.geo?.latitude && out.lat==null){ out.lat=+o.geo.latitude; out.lng=+o.geo.longitude; } } }
+  if(!out.genre){ const k = pick(/<meta[^>]+name="keywords"[^>]+content="([^"]+)"/, /<meta[^>]+content="([^"]+)"[^>]+name="keywords"/); if(k){ const g=toGenre(k[1]); if(g!=='その他') out.genre=g; } }
   const ll = pick(/"latitude"\s*:\s*"?(-?\d{2}\.\d+)"?[^}]{0,120}?"longitude"\s*:\s*"?(-?\d{3}\.\d+)/, /center=(-?\d{2}\.\d+)(?:,|%2C)(-?\d{3}\.\d+)/, /[?&]ll=(-?\d{2}\.\d+),(-?\d{3}\.\d+)/,
     /data-lat="(-?\d{2}\.\d+)"[^>]*data-lng="(-?\d{3}\.\d+)"/, /lat[=:]\s*"?(-?\d{2}\.\d{4,})"?[,&\s]+(?:lng|lon)[=:]\s*"?(-?\d{3}\.\d{4,})/, /@(-?\d{2}\.\d+),(-?\d{3}\.\d+)/);
   if(ll && out.lat==null){ out.lat=+ll[1]; out.lng=+ll[2]; }
@@ -786,7 +816,7 @@ async function lookupUrl(u){
 // 店名から位置を探す（ホットペッパー → だめなら地図の地名検索）
 async function findByName(name){
   const s=D().settings;
-  try{ const r = await hpFetch({keyword:name, lat:s.officeLat, lng:s.officeLng, range:'5'}); if(r[0]) return {lat:+r[0].lat, lng:+r[0].lng, name:r[0].name}; }catch{}
+  try{ const r = await hpFetch({keyword:name, lat:s.officeLat, lng:s.officeLng, range:'5'}); if(r[0]) return {lat:+r[0].lat, lng:+r[0].lng, name:r[0].name, genre:toGenre((r[0].genre?.name||'')+' '+r[0].name), budget:midBudget(r[0].budget?.average||r[0].budget?.name)}; }catch{}
   try{ const v=`${s.officeLng-0.25},${s.officeLat+0.2},${s.officeLng+0.25},${s.officeLat-0.2}`;
     const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1&viewbox=${v}&q=${encodeURIComponent(name)}`).then(x=>x.json());
     if(r[0]) return {lat:+r[0].lat, lng:+r[0].lon}; }catch{}
@@ -820,7 +850,14 @@ function addForm(){
     <div class="row"><button class="btn ghost" id="fCancel">やめる</button><button class="btn pri" id="fOk" style="flex:1">提案する</button></div>`,'add');
   const sync = ()=>{ draft.url=$('#fUrl').value; draft.name=$('#fName').value; draft.genre=$('#fGenre').value; draft.budget=$('#fBud').value.replace(/[^\d]/g,''); draft.pitch=$('#fPitch').value; };
   // 読み取れたら、入力画面の後ろの地図にピンを立てる
-  const showFound = (q)=>{ sync(); draft.lat=q.lat; draft.lng=q.lng; $('#fPos').textContent='位置：設定ずみ（地図のピン）'; showDraftPin(true); };
+  const showFound = (q)=>{ sync(); draft.lat=q.lat; draft.lng=q.lng; $('#fPos').textContent='位置：設定ずみ（地図のピン）'; showDraftPin(true); fillMore(q); };
+  // ジャンルと予算も、空いていれば自動で入れる（ページに無ければホットペッパーで探す）
+  const fillMore = async (q)=>{ const u=draft.url; let info={genre:q.genre, budget:q.budget};
+    if((!info.genre || !info.budget) && draft.name) { const h = await hpDetails(draft.name.trim(), q.lat, q.lng); info.genre ||= h.genre; info.budget ||= h.budget; }
+    if(draft?.url!==u || !$('#fUrl')) return; sync(); const got=['店名','位置'];
+    if(info.genre && !draft.genre){ draft.genre=info.genre; $('#fGenre').value=info.genre; got.push('ジャンル'); }
+    if(info.budget && !draft.budget){ draft.budget=String(info.budget); $('#fBud').value=draft.budget; got.push('予算'); }
+    $('#fHint').textContent = draft.name ? `${got.join('・')}を自動で入れました。違っていたら直してください。` : '位置を読み取りました。店名を入れてください。'; };
   $('#fName').addEventListener('input', ()=>{ sync(); if(draftPin) draftPin.getElement().querySelector('b').textContent=draft.name.trim(); });
   $('#fUrl').addEventListener('input', ()=>{ sync(); const p=parseShopUrl(draft.url);
     if(p.name && !draft.name){ draft.name=p.name; $('#fName').value=p.name; }
@@ -834,7 +871,7 @@ function addForm(){
   $('#fFind').onclick = async()=>{ sync(); if(!draft.name.trim()){ $('#fErr').textContent='先に店名を入れてください'; return; } $('#fFind').disabled=true;
     const q = await findByName(draft.name.trim()); $('#fFind').disabled=false;
     if(!q){ $('#fErr').textContent='見つかりませんでした。「地図で決める」で位置を合わせてください'; return; }
-    draft.lat=q.lat; draft.lng=q.lng; $('#fErr').textContent=''; $('#fPos').textContent='位置：店名から設定しました（違っていたら地図で直せます）'; showDraftPin(true); };
+    draft.lat=q.lat; draft.lng=q.lng; $('#fErr').textContent=''; $('#fPos').textContent='位置：店名から設定しました（違っていたら地図で直せます）'; showDraftPin(true); fillMore(q); };
   $('#fPick').onclick = ()=>{ sync(); hideDraftPin(); startPick('お店の場所に合わせてください', draft.lat!=null?[draft.lng,draft.lat]:null, c=>{ draft.lat=c.lat; draft.lng=c.lng; addForm(); }, addForm); };
   $('#fCancel').onclick = ()=>{ draft=null; closeSheet(); };
   $('#fOk').onclick = async()=>{ sync();
